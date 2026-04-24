@@ -41,7 +41,7 @@ pub opaque type Message {
 
 fn update(model: Model, message: Message) -> Model {
   case message {
-    UserClickedIncrement -> model + 3
+    UserClickedIncrement -> model + 1
     UserClickedDecrement -> model - 1
   }
 }

@@ -13,7 +13,7 @@ version = "1.0.0"
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 [dependencies]
-gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 lustre = ">= 5.6.0 and < 6.0.0"
 gleam_http = ">= 4.3.0 and < 5.0.0"
 envoy = ">= 1.2.0 and < 2.0.0"
@@ -22,6 +22,11 @@ woof = ">= 1.5.0 and < 2.0.0"
 gleam_erlang = ">= 1.3.0 and < 2.0.0"
 gleam_json = ">= 3.1.0 and < 4.0.0"
 mist_reload = ">= 1.0.1 and < 2.0.0"
+gleam_otp = ">= 1.2.0 and < 2.0.0"
+radiate = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
+dream_test = ">= 1.2.0 and < 2.0.0"
+chrobot = ">= 4.0.0 and < 5.0.0"
+simplifile = ">= 2.4.0 and < 3.0.0"
