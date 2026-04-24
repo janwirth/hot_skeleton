@@ -31,8 +31,8 @@ import chrobot
 import dream_test/assertions/should.{or_fail_with, should}
 import dream_test/gherkin/feature.{and, feature, given, scenario, then, when}
 import dream_test/gherkin/steps.{
-  type StepContext, get_int, given as def_given, new_registry,
-  then_ as def_then, when_ as def_when,
+  type StepContext, get_int, given as def_given, new_registry, then_ as def_then,
+  when_ as def_when,
 }
 import dream_test/gherkin/world
 import dream_test/matchers/equality.{equal}
@@ -46,7 +46,6 @@ import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import hot_skeleton/component_wrapper
-import hot_skeleton/hot_reload
 import simplifile
 
 const counter_path = "src/examples/counter/logic.gleam"
@@ -92,7 +91,8 @@ pub fn tests() -> TestSuite {
 fn step_start_server(ctx: StepContext) -> AssertionResult {
   let assert Ok(port) = get_int(ctx.captures, 0)
   let _ = ensure_server_started(port)
-  wait_for_server(port, 40)
+  // First `gleam test` can block on `tailwind/install` (CLI download) before the port opens.
+  wait_for_server(port, 200)
   AssertionOk
 }
 
@@ -145,11 +145,7 @@ fn step_assert_count(ctx: StepContext) -> AssertionResult {
     should(actual)
     |> equal(expected_text(expected))
     |> or_fail_with(
-      "Expected `"
-      <> expected_text(expected)
-      <> "`, got `"
-      <> actual
-      <> "`",
+      "Expected `" <> expected_text(expected) <> "`, got `" <> actual <> "`",
     )
 
   // Defensive cleanup: if an assertion fails mid-scenario, make sure we
@@ -196,7 +192,7 @@ fn ensure_server_started(port: Int) -> Nil {
               component_wrapper.start_hot_server_with_wrap(
                 counter.component,
                 port,
-                fn(h) { hot_reload.wrap(h, None) },
+                fn(h) { h },
                 None,
               )
             })
@@ -236,8 +232,7 @@ fn read_file(path: String) -> String {
 fn rewrite_increment(source: String, new: String) -> String {
   let prefix = "UserClickedIncrement -> model + "
   case string.split_once(source, prefix) {
-    Ok(#(before, tail)) ->
-      before <> prefix <> new <> drop_leading_digits(tail)
+    Ok(#(before, tail)) -> before <> prefix <> new <> drop_leading_digits(tail)
     Error(_) -> source
   }
 }
@@ -254,10 +249,7 @@ fn drop_leading_digits(s: String) -> String {
 }
 
 fn is_digit(c: String) -> Bool {
-  list.contains(
-    ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
-    c,
-  )
+  list.contains(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"], c)
 }
 
 // ============================================================================

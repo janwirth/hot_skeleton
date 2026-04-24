@@ -40,11 +40,10 @@ pub fn dev_rerender_message() -> Message {
 
 pub fn view(model: Model) -> Element(Message) {
   let count = int.to_string(model)
-  let styles = [#("display", "flex"), #("justify-content", "space-between")]
 
   element.fragment([
-    html.h1([], [html.text("Hi you")]),
-    html.div([attribute.styles(styles)], [
+    html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
+    html.div([attribute.class("flex justify-between gap-3 items-center")], [
       view_button(label: "-", on_click: UserClickedDecrement),
       html.p([], [html.text("Count: "), html.text(count)]),
       view_button(label: "+", on_click: UserClickedIncrement),
@@ -56,5 +55,11 @@ fn view_button(
   label label: String,
   on_click handle_click: message,
 ) -> Element(message) {
-  html.button([event.on_click(handle_click)], [html.text(label)])
+  html.button(
+    [
+      event.on_click(handle_click),
+      attribute.class("border border-black px-2 py-1 text-sm hover:opacity-60"),
+    ],
+    [html.text(label)],
+  )
 }

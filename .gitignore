@@ -1,5 +1,19 @@
+# Gleam / Erlang
 *.beam
 *.ez
 /build
 erl_crash.dump
+
+# Chrobot / tests
 chrome
+
+# glailglind (tailwind CLI) + hot_skeleton build output
+.hot_skeleton
+
+# If any JS package manager is ever used locally
+node_modules
+bun.lock
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

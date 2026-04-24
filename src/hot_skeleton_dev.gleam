@@ -12,8 +12,6 @@ pub fn main() -> Nil {
     counter.component,
     8080,
     fn(h) { h },
-    Some(fn(r) {
-      lustre.send(r, lustre.dispatch(logic.dev_rerender_message()))
-    }),
+    Some(fn(r) { lustre.send(r, lustre.dispatch(logic.dev_rerender_message())) }),
   )
 }

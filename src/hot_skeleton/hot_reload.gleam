@@ -15,11 +15,18 @@
 //// On macOS, `radiate.add_dir` needs `"."` or an absolute path or
 //// fsevents will silently do nothing. We always resolve the project
 //// root via `file:get_cwd/0` and pass the absolute `<cwd>/src`.
+////
+//// CSS is built with [glailglind](https://github.com/okkdev/glailglind)
+//// from `[tools.tailwind]` in `gleam.toml` (watch process runs in cwd).
 
+import gleam/erlang/process
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import radiate
+import simplifile
+import tailwind
 
 /// Start the radiate file watcher and return the handler unchanged. No
 /// SSE endpoint, no HTML injection, no client-side reload script — the
@@ -31,6 +38,7 @@ import radiate
 /// so a singleton server component re-runs `view` with the new code — new
 /// WebSocket clients otherwise receive a stale cached vdom.
 pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
+  let _ = bootstrap_tailwind()
   let src_dir = absolute_src_dir()
   let _ =
     radiate.new()
@@ -47,6 +55,32 @@ pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
   handler
 }
 
+/// Same as `[tools.tailwind] args` in `gleam.toml` — keep them aligned.
+fn tailwind_cli_args() -> List(String) {
+  ["-i=./app.tailwind.css", "-o=./.hot_skeleton/tailwind.css"]
+}
+
+fn bootstrap_tailwind() {
+  let _ = simplifile.create_directory_all(".hot_skeleton")
+  case tailwind.install() {
+    Error(msg) -> io.println(msg)
+    Ok(Nil) -> Nil
+  }
+  case tailwind.run(tailwind_cli_args()) {
+    Error(msg) -> io.println(msg)
+    Ok(_) -> Nil
+  }
+  let wargs = list.append(tailwind_cli_args(), ["--watch"])
+  let _ =
+    process.spawn(fn() {
+      case tailwind.run(wargs) {
+        Error(msg) -> io.println(msg)
+        Ok(_) -> Nil
+      }
+    })
+  Nil
+}
+
 fn absolute_src_dir() -> String {
   let cwd = get_cwd()
   case string.ends_with(cwd, "/") {
@@ -57,3 +91,9 @@ fn absolute_src_dir() -> String {
 
 @external(erlang, "hot_skeleton_hot_reload_ffi", "cwd")
 fn get_cwd() -> String
+
+@external(erlang, "hot_skeleton_hot_reload_ffi", "css_path_string")
+pub fn css_path_string() -> String
+
+@external(erlang, "hot_skeleton_hot_reload_ffi", "css_cache_bust")
+pub fn css_cache_bust() -> String

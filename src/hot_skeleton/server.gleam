@@ -25,7 +25,8 @@ import woof
 /// `reload.wrap` from the mist_reload package in dev.
 pub fn start(
   port: Int,
-  handle: fn(request.Request(mist.Connection)) -> response.Response(mist.ResponseData),
+  handle: fn(request.Request(mist.Connection)) ->
+    response.Response(mist.ResponseData),
 ) -> Nil {
   let assert Ok(_) =
     handle
@@ -33,7 +34,9 @@ pub fn start(
     |> mist.bind("0.0.0.0")
     |> mist.port(port)
     |> mist.start
-  woof.info("boot", [woof.str("event", "listening on 0.0.0.0:" <> int.to_string(port))])
+  woof.info("boot", [
+    woof.str("event", "listening on 0.0.0.0:" <> int.to_string(port)),
+  ])
   sleep_forever()
 }
 
