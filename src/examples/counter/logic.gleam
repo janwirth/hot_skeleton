@@ -15,6 +15,9 @@ pub type Model =
 pub opaque type Message {
   UserClickedIncrement
   UserClickedDecrement
+  /// Internal: re-run [`view`](../counter.gleam) with the current model after
+  /// a BEAM code load so singleton server components remount with fresh vdom.
+  DevRerenderView
 }
 
 pub fn init(_: Nil) -> Model {
@@ -25,7 +28,14 @@ pub fn update(model: Model, message: Message) -> Model {
   case message {
     UserClickedIncrement -> model + 1
     UserClickedDecrement -> model - 1
+    DevRerenderView -> model
   }
+}
+
+/// Message sent by dev tooling after `gleam build` + code reload so
+/// `view` re-executes with the newly loaded module (singleton runtime).
+pub fn dev_rerender_message() -> Message {
+  DevRerenderView
 }
 
 pub fn view(model: Model) -> Element(Message) {
@@ -33,7 +43,7 @@ pub fn view(model: Model) -> Element(Message) {
   let styles = [#("display", "flex"), #("justify-content", "space-between")]
 
   element.fragment([
-    html.h1([], [html.text("Hi there wassup")]),
+    html.h1([], [html.text("Hi you")]),
     html.div([attribute.styles(styles)], [
       view_button(label: "-", on_click: UserClickedDecrement),
       html.p([], [html.text("Count: "), html.text(count)]),

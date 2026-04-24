@@ -16,6 +16,8 @@
 //// fsevents will silently do nothing. We always resolve the project
 //// root via `file:get_cwd/0` and pass the absolute `<cwd>/src`.
 
+import gleam/io
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import radiate
 
@@ -23,11 +25,24 @@ import radiate
 /// SSE endpoint, no HTML injection, no client-side reload script — the
 /// reload is a pure BEAM code swap and in-memory state is preserved
 /// across it.
-pub fn wrap(handler) {
+///
+/// If `after_modules_loaded` is [`Some`], it runs after `code:atomic_load`
+/// (for example to [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch)
+/// so a singleton server component re-runs `view` with the new code — new
+/// WebSocket clients otherwise receive a stale cached vdom.
+pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
   let src_dir = absolute_src_dir()
   let _ =
     radiate.new()
     |> radiate.add_dir(src_dir)
+    |> radiate.on_reload(fn(_state, path) {
+      io.println("Change in " <> path <> ", reloading.")
+      case after_modules_loaded {
+        Some(f) -> f()
+        None -> Nil
+      }
+      Nil
+    })
     |> radiate.start()
   handler
 }

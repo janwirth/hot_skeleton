@@ -196,7 +196,8 @@ fn ensure_server_started(port: Int) -> Nil {
               component_wrapper.start_hot_server_with_wrap(
                 counter.component,
                 port,
-                hot_reload.wrap,
+                fn(h) { hot_reload.wrap(h, None) },
+                None,
               )
             })
           Nil

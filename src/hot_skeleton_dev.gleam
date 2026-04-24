@@ -1,16 +1,19 @@
 import examples/counter
+import examples/counter/logic
+import gleam/option.{Some}
 import hot_skeleton/component_wrapper
-import hot_skeleton/hot_reload
+import lustre
 
-/// Development: run with `gleam dev`. Uses a local
-/// [`hot_reload`](./hot_skeleton/hot_reload.gleam) wrapper — a patched variant
-/// of [mist_reload](https://github.com/CrowdHailer/mist_reload) that passes
-/// [radiate](https://hexdocs.pm/radiate) an absolute path, which is required
-/// for filespy/fsevents to actually fire on macOS.
+/// Development: run with `gleam dev`. Uses [`hot_reload`](./hot_skeleton/hot_reload.gleam) —
+/// same as in [`start_hot_server_with_wrap`](../hot_skeleton/component_wrapper.gleam), plus
+/// a post-reload `dispatch` so the singleton Lustre runtime remounts vdom for new clients.
 pub fn main() -> Nil {
   component_wrapper.start_hot_server_with_wrap(
     counter.component,
     8080,
-    hot_reload.wrap,
+    fn(h) { h },
+    Some(fn(r) {
+      lustre.send(r, lustre.dispatch(logic.dev_rerender_message()))
+    }),
   )
 }

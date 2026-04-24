@@ -5,13 +5,12 @@ import gleam/http
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/json
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some, map}
 import gleam/string
 import lustre.{
   type App,
   type Runtime,
   send as lustre_send,
-  shutdown,
   start_server_component,
 }
 import lustre/attribute
@@ -19,6 +18,7 @@ import lustre/element
 import lustre/element/html
 import lustre/server_component
 import mist
+import hot_skeleton/hot_reload
 import hot_skeleton/server as hot_server
 
 import woof
@@ -34,23 +34,31 @@ pub type HttpHandler =
 pub fn start_hot_server(
   make_app: fn() -> App(Nil, model, message),
 ) -> Nil {
-  start_hot_server_with_wrap(make_app, 8080, fn(h) { h })
+  start_hot_server_with_wrap(make_app, 8080, fn(h) { h }, None)
 }
 
+/// `on_beam_modules_loaded`: after radiate runs `gleam build` and loads new
+/// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
+/// [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch) a
+/// no-op message so `view` runs again; otherwise new WebSocket clients keep
+/// receiving the vdom cached before the code swap.
 pub fn start_hot_server_with_wrap(
   make_app: fn() -> App(Nil, model, message),
   default_port: Int,
   mist_wrap: fn(HttpHandler) -> HttpHandler,
+  on_beam_modules_loaded: Option(fn(Runtime(message)) -> Nil),
 ) -> Nil {
   let port = hot_server.resolve_port(default_port)
-  let base = build_http_handler(make_app)
+  let #(base, runtime) = build_http_handler_with_runtime(make_app)
+  let after: Option(fn() -> Nil) =
+    map(on_beam_modules_loaded, fn(f) { fn() { f(runtime) } })
+  let base = hot_reload.wrap(base, after)
   let handle = mist_wrap(base)
   hot_server.start(port, handle)
 }
 
 type ComponentSocket(msg) {
   ComponentSocket(
-    component: Runtime(msg),
     self: process.Subject(server_component.ClientMessage(msg)),
   )
 }
@@ -58,13 +66,15 @@ type ComponentSocket(msg) {
 type ComponentSocketMessage(msg) =
   server_component.ClientMessage(msg)
 
-fn build_http_handler(
+fn build_http_handler_with_runtime(
   make_app: fn() -> App(Nil, model, message),
-) -> HttpHandler {
+) -> #(HttpHandler, Runtime(message)) {
+  let app = make_app()
+  let assert Ok(singleton) = start_server_component(app, Nil)
   let serve_ws = fn(req: Request(mist.Connection)) {
-    serve_component_websocket(req, make_app)
+    serve_component_websocket(req, singleton)
   }
-  fn(req: Request(mist.Connection)) {
+  let http_handler = fn(req: Request(mist.Connection)) {
     let segments = request.path_segments(req)
     let path = "/" <> string.join(segments, "/")
     woof.info("http", [woof.str("event", hot_server.http_method(req.method) <> " " <> path)])
@@ -75,6 +85,7 @@ fn build_http_handler(
       _, _ -> hot_server.not_found(path)
     }
   }
+  #(http_handler, singleton)
 }
 
 fn index_document() -> String {
@@ -134,18 +145,16 @@ fn serve_lustre_mjs() -> Response(mist.ResponseData) {
 
 fn serve_component_websocket(
   request: Request(mist.Connection),
-  make_app: fn() -> App(Nil, m, message),
+  component: Runtime(message),
 ) -> Response(mist.ResponseData) {
   let on_init = fn(_connection: mist.WebsocketConnection) {
-    let app = make_app()
-    let assert Ok(component) = start_server_component(app, Nil)
     let self = process.new_subject()
     let selector =
       process.new_selector()
       |> process.select(self)
     let registered = server_component.register_subject(self)
     lustre_send(to: component, message: registered)
-    let state = ComponentSocket(component:, self:)
+    let state = ComponentSocket(self:)
     #(state, Some(selector))
   }
   let handler = fn(
@@ -159,7 +168,7 @@ fn serve_component_websocket(
     case message {
       mist.Text(text) -> {
         case json.parse(text, server_component.runtime_message_decoder()) {
-          Ok(runtime_message) -> lustre_send(to: state.component, message: runtime_message)
+          Ok(runtime_message) -> lustre_send(to: component, message: runtime_message)
           Error(_) -> Nil
         }
         mist.continue(state)
@@ -174,7 +183,10 @@ fn serve_component_websocket(
     }
   }
   let on_close = fn(state: ComponentSocket(message)) {
-    lustre_send(to: state.component, message: shutdown())
+    lustre_send(
+      to: component,
+      message: server_component.deregister_subject(state.self),
+    )
   }
   mist.websocket(
     request:,
