@@ -16,23 +16,24 @@
 //// fsevents will silently do nothing. We always resolve the project
 //// root via `file:get_cwd/0` and pass the absolute `<cwd>/src`.
 ////
-//// Optional CSS: if `./app.tailwind.css` exists in the **application cwd**
-//// (the directory you run `gleam` from), [glailglind](https://github.com/okkdev/glailglind)
-//// installs the CLI, runs a build, and starts `--watch`. Add `[tools.tailwind]`
-//// in that app’s `gleam.toml` and keep its `args` in sync with
-//// [`tailwind_cli_args`]. Apps without that file skip Tailwind entirely.
+//// CSS: [glailglind](https://github.com/okkdev/glailglind) installs the Tailwind
+//// CLI, compiles to [`css_path_string`], and recompiles on every [radiate]
+//// reload (same watcher as Gleam, no separate `tailwind --watch` process).
+//// Input is `./app.tailwind.css` when that file exists, otherwise a generated
+//// [`default_tailwind_input_path`]. For `gleam run -m tailwind/run`, match
+//// `[tools.tailwind] args` to that entry (`-i=./app.tailwind.css` or, without
+//// that file, `-i=./.hot_skeleton/tailwind-input.css` once it exists).
 
-import gleam/erlang/process
 import gleam/io
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import radiate
 import simplifile
 import tailwind
 
-// Same default as glailglind `tailwind` when `gleam.toml` has no `[tools.tailwind] path`.
-const default_tailwind_cli = "./build/bin/tailwindcss"
+const default_tailwind_input_rel = ".hot_skeleton/tailwind-input.css"
+
+const default_tailwind_input_source = "@import \"tailwindcss\";\n"
 
 /// Start the radiate file watcher and return the handler unchanged. No
 /// SSE endpoint, no HTML injection, no client-side reload script — the
@@ -44,10 +45,7 @@ const default_tailwind_cli = "./build/bin/tailwindcss"
 /// so a singleton server component re-runs `view` with the new code — new
 /// WebSocket clients otherwise receive a stale cached vdom.
 pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
-  let _ = case tailwind_enabled() {
-    True -> bootstrap_tailwind()
-    False -> Nil
-  }
+  let _ = bootstrap_tailwind()
   let src_dir = absolute_src_dir()
   let _ =
     radiate.new()
@@ -58,49 +56,79 @@ pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
         Some(f) -> f()
         None -> Nil
       }
+      rebuild_tailwind("watch " <> path)
       Nil
     })
     |> radiate.start()
   handler
 }
 
-/// `True` when `./app.tailwind.css` is present in cwd (i.e. this app uses Tailwind).
+/// Always `True` when the app uses dev [`wrap`]: CSS is built to
+/// `.hot_skeleton/tailwind.css` so `/app.css` can serve the latest compile.
 pub fn tailwind_enabled() -> Bool {
-  case simplifile.is_file("app.tailwind.css") {
-    Ok(True) -> True
-    _ -> False
-  }
+  True
+}
+
+/// Host input when `./app.tailwind.css` is missing: created at bootstrap with
+/// a minimal v4 import so Tailwind does not need a user-owned entry file.
+pub fn default_tailwind_input_path() -> String {
+  default_tailwind_input_rel
 }
 
 /// Same as `[tools.tailwind] args` in the host app’s `gleam.toml` — keep them aligned.
 fn tailwind_cli_args() -> List(String) {
-  ["-i=./app.tailwind.css", "-o=./.hot_skeleton/tailwind.css"]
+  let input = case simplifile.is_file("app.tailwind.css") {
+    Ok(True) -> "./app.tailwind.css"
+    _ -> "./" <> default_tailwind_input_rel
+  }
+  ["-i=" <> input, "-o=./.hot_skeleton/tailwind.css"]
 }
 
+fn ensure_default_tailwind_input() -> Nil {
+  case simplifile.is_file("app.tailwind.css") {
+    Ok(True) -> Nil
+    _ -> {
+      let _ = simplifile.create_directory_all(".hot_skeleton")
+      case simplifile.is_file(default_tailwind_input_rel) {
+        Ok(True) -> Nil
+        _ -> {
+          let _ =
+            simplifile.write(
+              default_tailwind_input_rel,
+              default_tailwind_input_source,
+            )
+          Nil
+        }
+      }
+    }
+  }
+}
+
+/// Install CLI if needed, ensure input file, one compile, log result.
 fn bootstrap_tailwind() {
+  let _ = ensure_default_tailwind_input()
   let _ = simplifile.create_directory_all(".hot_skeleton")
   case tailwind.install() {
     Error(msg) -> io.println(msg)
     Ok(Nil) -> Nil
   }
+  rebuild_tailwind("bootstrap")
+  Nil
+}
+
+/// Run Tailwind CLI; log to the console on success (CLI output) or on error.
+fn rebuild_tailwind(reason: String) {
   case tailwind.run(tailwind_cli_args()) {
-    Error(msg) -> io.println(msg)
-    Ok(_) -> Nil
-  }
-  let wargs = list.append(tailwind_cli_args(), ["--watch"])
-  let _ = case os_is_unix() {
-    True ->
-      // Stdin is `/dev/null` in the port driver (FFI) so the watch process never
-      // contends for the same TTY as the shell (see `spawn_tailwind_watcher/2`).
-      spawn_tailwind_watcher(default_tailwind_cli, wargs)
-    False -> {
-      let _ = process.spawn(fn() {
-        case tailwind.run(wargs) {
-          Error(msg) -> io.println(msg)
-          Ok(_) -> Nil
-        }
-      })
-      Nil
+    Error(msg) -> {
+      io.println("Tailwind rebuild failed (" <> reason <> "): " <> msg)
+    }
+    Ok(out) -> {
+      let trimmed = string.trim(out)
+      case trimmed {
+        "" ->
+          io.println("Tailwind compiled (" <> reason <> "): .hot_skeleton/tailwind.css")
+        _ -> io.println("Tailwind compiled (" <> reason <> "): " <> trimmed)
+      }
     }
   }
   Nil
@@ -123,8 +151,3 @@ pub fn css_path_string() -> String
 @external(erlang, "hot_skeleton_hot_reload_ffi", "css_cache_bust")
 pub fn css_cache_bust() -> String
 
-@external(erlang, "hot_skeleton_hot_reload_ffi", "os_is_unix")
-fn os_is_unix() -> Bool
-
-@external(erlang, "hot_skeleton_hot_reload_ffi", "spawn_tailwind_watcher")
-fn spawn_tailwind_watcher(executable: String, args: List(String)) -> Nil

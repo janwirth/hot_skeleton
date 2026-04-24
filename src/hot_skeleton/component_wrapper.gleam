@@ -91,32 +91,20 @@ fn build_http_handler_with_runtime(
 
 fn index_document() -> String {
   let t = hot_reload.css_cache_bust()
-  let head_children = case hot_reload.tailwind_enabled() {
-    True -> [
-      html.title([], "App"),
-      html.link([
-        attribute.rel("stylesheet"),
-        attribute.href("/app.css?t=" <> t),
-      ]),
-      html.script(
-        [
-          attribute.type_("module"),
-          attribute.src("/lustre-server-component.mjs"),
-        ],
-        "",
-      ),
-    ]
-    False -> [
-      html.title([], "App"),
-      html.script(
-        [
-          attribute.type_("module"),
-          attribute.src("/lustre-server-component.mjs"),
-        ],
-        "",
-      ),
-    ]
-  }
+  let head_children = [
+    html.title([], "App"),
+    html.link([
+      attribute.rel("stylesheet"),
+      attribute.href("/app.css?t=" <> t),
+    ]),
+    html.script(
+      [
+        attribute.type_("module"),
+        attribute.src("/lustre-server-component.mjs"),
+      ],
+      "",
+    ),
+  ]
   let page =
     html.html([], [
       html.head([], head_children),
@@ -140,22 +128,16 @@ fn serve_index() -> Response(mist.ResponseData) {
 }
 
 fn serve_app_css() -> Response(mist.ResponseData) {
-  case hot_reload.tailwind_enabled() {
-    False ->
+  case
+    mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None)
+  {
+    Ok(file) ->
+      response.new(200)
+      |> response.prepend_header("content-type", "text/css; charset=utf-8")
+      |> response.set_body(file)
+    Error(_) ->
       response.new(404)
       |> response.set_body(mist.Bytes(bytes_tree.new()))
-    True ->
-      case
-        mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None)
-      {
-        Ok(file) ->
-          response.new(200)
-          |> response.prepend_header("content-type", "text/css; charset=utf-8")
-          |> response.set_body(file)
-        Error(_) ->
-          response.new(404)
-          |> response.set_body(mist.Bytes(bytes_tree.new()))
-      }
   }
 }
 
