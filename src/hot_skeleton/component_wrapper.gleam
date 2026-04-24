@@ -28,9 +28,9 @@ pub type HttpHandler =
 /// used in production and in dev. In dev, run [`start_hot_server_dev`] or pass
 /// [`reload.wrap`](https://hexdocs.pm/mist_reload/mist/reload.html#wrap) so
 /// the browser and Erlang get hot updates from [mist_reload](https://github.com/CrowdHailer/mist_reload).
-pub fn start_hot_server(make_app: fn() -> App(Nil, model, message)) -> Nil {
-  start_hot_server_with_wrap(make_app, 8080, fn(h) { h }, None)
-}
+// pub fn start_hot_server(make_app: fn() -> App(Nil, model, message)) -> Nil {
+//   start_hot_server_with_wrap(make_app, 8080, fn(h) { h }, None)
+// }
 
 /// `on_beam_modules_loaded`: after radiate runs `gleam build` and loads new
 /// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
@@ -41,12 +41,17 @@ pub fn start_hot_server_with_wrap(
   make_app: fn() -> App(Nil, model, message),
   default_port: Int,
   mist_wrap: fn(HttpHandler) -> HttpHandler,
-  on_beam_modules_loaded: Option(fn(Runtime(message)) -> Nil),
+  reload_msg: fn() -> message,
 ) -> Nil {
+
+  let on_beam_modules_loaded = fn(r: Runtime(message)) {
+    lustre.send(r, lustre.dispatch(reload_msg()))
+  }
+
   let port = hot_server.resolve_port(default_port)
   let #(base, runtime) = build_http_handler_with_runtime(make_app)
   let after: Option(fn() -> Nil) =
-    map(on_beam_modules_loaded, fn(f) { fn() { f(runtime) } })
+    map(Some(on_beam_modules_loaded), fn(f) { fn() { f(runtime) } })
   let base = hot_reload.wrap(base, after)
   let handle = mist_wrap(base)
   hot_server.start(port, handle)
@@ -86,22 +91,35 @@ fn build_http_handler_with_runtime(
 
 fn index_document() -> String {
   let t = hot_reload.css_cache_bust()
+  let head_children = case hot_reload.tailwind_enabled() {
+    True -> [
+      html.title([], "App"),
+      html.link([
+        attribute.rel("stylesheet"),
+        attribute.href("/app.css?t=" <> t),
+      ]),
+      html.script(
+        [
+          attribute.type_("module"),
+          attribute.src("/lustre-server-component.mjs"),
+        ],
+        "",
+      ),
+    ]
+    False -> [
+      html.title([], "App"),
+      html.script(
+        [
+          attribute.type_("module"),
+          attribute.src("/lustre-server-component.mjs"),
+        ],
+        "",
+      ),
+    ]
+  }
   let page =
     html.html([], [
-      html.head([], [
-        html.title([], "App"),
-        html.link([
-          attribute.rel("stylesheet"),
-          attribute.href("/app.css?t=" <> t),
-        ]),
-        html.script(
-          [
-            attribute.type_("module"),
-            attribute.src("/lustre-server-component.mjs"),
-          ],
-          "",
-        ),
-      ]),
+      html.head([], head_children),
       html.body([], [
         server_component.element(
           [
@@ -122,14 +140,22 @@ fn serve_index() -> Response(mist.ResponseData) {
 }
 
 fn serve_app_css() -> Response(mist.ResponseData) {
-  case mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None) {
-    Ok(file) ->
-      response.new(200)
-      |> response.prepend_header("content-type", "text/css; charset=utf-8")
-      |> response.set_body(file)
-    Error(_) ->
+  case hot_reload.tailwind_enabled() {
+    False ->
       response.new(404)
       |> response.set_body(mist.Bytes(bytes_tree.new()))
+    True ->
+      case
+        mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None)
+      {
+        Ok(file) ->
+          response.new(200)
+          |> response.prepend_header("content-type", "text/css; charset=utf-8")
+          |> response.set_body(file)
+        Error(_) ->
+          response.new(404)
+          |> response.set_body(mist.Bytes(bytes_tree.new()))
+      }
   }
 }
 

@@ -16,8 +16,11 @@
 //// fsevents will silently do nothing. We always resolve the project
 //// root via `file:get_cwd/0` and pass the absolute `<cwd>/src`.
 ////
-//// CSS is built with [glailglind](https://github.com/okkdev/glailglind)
-//// from `[tools.tailwind]` in `gleam.toml` (watch process runs in cwd).
+//// Optional CSS: if `./app.tailwind.css` exists in the **application cwd**
+//// (the directory you run `gleam` from), [glailglind](https://github.com/okkdev/glailglind)
+//// installs the CLI, runs a build, and starts `--watch`. Add `[tools.tailwind]`
+//// in that app’s `gleam.toml` and keep its `args` in sync with
+//// [`tailwind_cli_args`]. Apps without that file skip Tailwind entirely.
 
 import gleam/erlang/process
 import gleam/io
@@ -38,7 +41,10 @@ import tailwind
 /// so a singleton server component re-runs `view` with the new code — new
 /// WebSocket clients otherwise receive a stale cached vdom.
 pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
-  let _ = bootstrap_tailwind()
+  let _ = case tailwind_enabled() {
+    True -> bootstrap_tailwind()
+    False -> Nil
+  }
   let src_dir = absolute_src_dir()
   let _ =
     radiate.new()
@@ -55,7 +61,15 @@ pub fn wrap(handler: a, after_modules_loaded: Option(fn() -> Nil)) -> a {
   handler
 }
 
-/// Same as `[tools.tailwind] args` in `gleam.toml` — keep them aligned.
+/// `True` when `./app.tailwind.css` is present in cwd (i.e. this app uses Tailwind).
+pub fn tailwind_enabled() -> Bool {
+  case simplifile.is_file("app.tailwind.css") {
+    Ok(True) -> True
+    _ -> False
+  }
+}
+
+/// Same as `[tools.tailwind] args` in the host app’s `gleam.toml` — keep them aligned.
 fn tailwind_cli_args() -> List(String) {
   ["-i=./app.tailwind.css", "-o=./.hot_skeleton/tailwind.css"]
 }

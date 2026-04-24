@@ -87,10 +87,13 @@ pub fn tests() -> TestSuite {
 // ============================================================================
 // Steps
 // ============================================================================
-
+import hot_skeleton
+import examples/counter/logic
 fn step_start_server(ctx: StepContext) -> AssertionResult {
   let assert Ok(port) = get_int(ctx.captures, 0)
-  let _ = ensure_server_started(port)
+  
+  let _ = hot_skeleton.start(counter.component, logic.dev_rerender_message)
+
   // First `gleam test` can block on `tailwind/install` (CLI download) before the port opens.
   wait_for_server(port, 200)
   AssertionOk
@@ -176,31 +179,6 @@ fn pt_put(key: String, value: a) -> Nil
 @external(erlang, "persistent_term", "get")
 fn pt_get_default(key: String, default: a) -> a
 
-fn ensure_server_started(port: Int) -> Nil {
-  // An external `gleam dev` may already be serving on this port. In that
-  // case we piggy-back on it — it has its own mist_reload + radiate loop
-  // that will hot-swap the counter module when the file changes.
-  case tcp_connect(port) {
-    True -> Nil
-    False ->
-      case pt_get_default("hot_skeleton_dev_server", False) {
-        True -> Nil
-        False -> {
-          pt_put("hot_skeleton_dev_server", True)
-          let _ =
-            process.spawn(fn() {
-              component_wrapper.start_hot_server_with_wrap(
-                counter.component,
-                port,
-                fn(h) { h },
-                None,
-              )
-            })
-          Nil
-        }
-      }
-  }
-}
 
 fn wait_for_server(port: Int, attempts: Int) -> Nil {
   case attempts {

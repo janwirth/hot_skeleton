@@ -1,14 +1,8 @@
-import examples/counter
-import gleam/io
 import hot_skeleton/component_wrapper
 import lustre.{type App}
 
-/// Production: `gleam run` — no live reload; static identity [`mist` handler](https://hexdocs.pm/mist).
-// pub fn main() -> Nil {
-//   io.println("Hello from hot_skeleton!")
-//   component_wrapper.start_hot_server(counter.component)
-// }
-
-pub fn start_hot_server(component: fn() -> App(Nil, model, message)) -> Nil {
-  component_wrapper.start_hot_server(component)
+/// Start the Lustre server (Mist, WebSocket, optional Tailwind when `./app.tailwind.css` exists in cwd).
+pub fn start(component: fn() -> App(Nil, model, message), refresh_view: fn() -> message) -> Nil {
+  component_wrapper.start_hot_server_with_wrap(component, 8080, fn(h) { h }, refresh_view)
 }
+
