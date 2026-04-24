@@ -31,6 +31,9 @@ import radiate
 import simplifile
 import tailwind
 
+// Same default as glailglind `tailwind` when `gleam.toml` has no `[tools.tailwind] path`.
+const default_tailwind_cli = "./build/bin/tailwindcss"
+
 /// Start the radiate file watcher and return the handler unchanged. No
 /// SSE endpoint, no HTML injection, no client-side reload script — the
 /// reload is a pure BEAM code swap and in-memory state is preserved
@@ -85,13 +88,21 @@ fn bootstrap_tailwind() {
     Ok(_) -> Nil
   }
   let wargs = list.append(tailwind_cli_args(), ["--watch"])
-  let _ =
-    process.spawn(fn() {
-      case tailwind.run(wargs) {
-        Error(msg) -> io.println(msg)
-        Ok(_) -> Nil
-      }
-    })
+  let _ = case os_is_unix() {
+    True ->
+      // Stdin is `/dev/null` in the port driver (FFI) so the watch process never
+      // contends for the same TTY as the shell (see `spawn_tailwind_watcher/2`).
+      spawn_tailwind_watcher(default_tailwind_cli, wargs)
+    False -> {
+      let _ = process.spawn(fn() {
+        case tailwind.run(wargs) {
+          Error(msg) -> io.println(msg)
+          Ok(_) -> Nil
+        }
+      })
+      Nil
+    }
+  }
   Nil
 }
 
@@ -111,3 +122,9 @@ pub fn css_path_string() -> String
 
 @external(erlang, "hot_skeleton_hot_reload_ffi", "css_cache_bust")
 pub fn css_cache_bust() -> String
+
+@external(erlang, "hot_skeleton_hot_reload_ffi", "os_is_unix")
+fn os_is_unix() -> Bool
+
+@external(erlang, "hot_skeleton_hot_reload_ffi", "spawn_tailwind_watcher")
+fn spawn_tailwind_watcher(executable: String, args: List(String)) -> Nil
