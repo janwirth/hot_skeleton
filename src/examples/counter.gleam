@@ -1,70 +1,25 @@
-// IMPORTS ---------------------------------------------------------------------
+//// Counter example. The MVU triple (`init`, `update`, `view`) lives in
+//// [`counter/logic`](./counter/logic.gleam) so that Gleam emits them as
+//// **cross-module** function references (`fun 'examples@counter@logic':update/2`).
+//// External fun refs dispatch through the Erlang code server on every
+//// call, which means radiate's hot code swap picks up new `update` logic
+//// inside the already-running lustre-server-component actor — no
+//// browser refresh, state preserved.
+////
+//// Gleam compiles bare, same-module references (`update`) to *local*
+//// fun refs that are pinned to the module version active at capture
+//// time, so they never hot-swap. Splitting into two modules is the
+//// cheapest way to opt into hot-reloadable `update`/`view`.
 
-import gleam/int
+import examples/counter/logic
 import lustre.{type App}
-import lustre/attribute
-import lustre/element.{type Element}
-import lustre/element/html
-import lustre/event
-
-// MAIN ------------------------------------------------------------------------
-
-/// The only difference between this module and the counter defined in
-/// 05-components/01-basic-setup is this function. The client component example
-/// exposes a `register` function to register the custom element, but here we
-/// expose a `component` function that constructs a Lustre application but does
-/// not start it.
-///
-/// It's common practice to provide both functions so that your users can choose
-/// where to run the component. This is known as a **universal component** because
-/// it can run in both the browser and the server.
-///
-pub fn component() -> App(_, Model, Message) {
-  lustre.simple(init, update, view)
-}
-
-// MODEL -----------------------------------------------------------------------
 
 pub type Model =
-  Int
+  logic.Model
 
-fn init(_) -> Model {
-  0
-}
+pub type Message =
+  logic.Message
 
-// UPDATE ----------------------------------------------------------------------
-
-pub opaque type Message {
-  UserClickedIncrement
-  UserClickedDecrement
-}
-
-fn update(model: Model, message: Message) -> Model {
-  case message {
-    UserClickedIncrement -> model + 1
-    UserClickedDecrement -> model - 1
-  }
-}
-
-// VIEW ------------------------------------------------------------------------
-
-fn view(model: Model) -> Element(Message) {
-  let count = int.to_string(model)
-  let styles = [#("display", "flex"), #("justify-content", "space-between")]
-
-  element.fragment([
-    html.h1([], [html.text("Hi there wassup")]),
-    html.div([attribute.styles(styles)], [
-      view_button(label: "-", on_click: UserClickedDecrement),
-      html.p([], [html.text("Count: "), html.text(count)]),
-      view_button(label: "+", on_click: UserClickedIncrement),
-    ]),
-  ])
-}
-
-fn view_button(
-  label label: String,
-  on_click handle_click: message,
-) -> Element(message) {
-  html.button([event.on_click(handle_click)], [html.text(label)])
+pub fn component() -> App(Nil, Model, Message) {
+  lustre.simple(logic.init, logic.update, logic.view)
 }

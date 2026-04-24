@@ -4,25 +4,28 @@
 ////
 ////   Given the dev server is running on port 8080
 ////   And a browser is opened on the counter page
+////   Then the count shows 0                       # fresh init
 ////   When I click the + button
-////   Then the count shows 3                       # baseline: original +3 applies
+////   Then the count shows 1                       # original +1 applied
 ////   When I edit counter.gleam so that clicking + increments by 2
-////   And I click the + button
-////   Then the count shows 2                       # after reload: +2 applies and state reset
+////   Then the count shows 1                       # state preserved across hot swap
+////   When I click the + button
+////   Then the count shows 3                       # 1 + 2 using new code on old state
 ////
-//// The baseline click proves the live code is the original counter. After
-//// touching the file, the page auto-reloads (counter is reset to 0) and the
-//// next click exercises the hot-swapped code.
+//// This verifies radiate's core feature: the BEAM VM loads the new
+//// `counter` module *without* tearing down the running
+//// lustre-server-component actor. The WebSocket stays open, the
+//// in-memory model survives, and the next `update` call dispatches
+//// into the new module.
 ////
 //// The server is started inside the test VM via [`component_wrapper`](../../src/hot_skeleton/component_wrapper.gleam)
-//// wrapped with [`hot_reload`](../../src/hot_skeleton/hot_reload.gleam) — a
-//// patched mist_reload that feeds radiate an absolute path (required for
-//// filespy/fsevents on macOS). Radiate recompiles and hot-swaps the counter
-//// module when the file is touched, the browser auto-reloads the page, and
-//// we verify the new increment.
+//// wrapped with [`hot_reload`](../../src/hot_skeleton/hot_reload.gleam) —
+//// a radiate watcher that (unlike mist_reload) does *not* refresh the
+//// browser. It feeds radiate an absolute path so fsevents fires on
+//// macOS.
 ////
-//// `src/examples/counter.gleam` is restored to its original content after the
-//// scenario finishes, regardless of whether it passed or failed.
+//// `src/examples/counter.gleam` is restored to its original content
+//// after the scenario finishes.
 
 import chrobot
 import dream_test/assertions/should.{or_fail_with, should}
@@ -46,7 +49,7 @@ import hot_skeleton/component_wrapper
 import hot_skeleton/hot_reload
 import simplifile
 
-const counter_path = "src/examples/counter.gleam"
+const counter_path = "src/examples/counter/logic.gleam"
 
 const base_url = "http://localhost:8080"
 
@@ -67,14 +70,16 @@ pub fn tests() -> TestSuite {
     )
 
   feature("Hot Reloading", registry, [
-    scenario("Source edits reload into the running page", [
+    scenario("Source edits hot-swap into the running actor, state survives", [
       given("the dev server is running on port 8080"),
       and("a browser is opened on the counter page"),
+      then("the count shows 0"),
+      when("I click the + button"),
+      then("the count shows 1"),
+      when("I edit counter.gleam so that clicking + increments by 2"),
+      then("the count shows 1"),
       when("I click the + button"),
       then("the count shows 3"),
-      when("I edit counter.gleam so that clicking + increments by 2"),
-      and("I click the + button"),
-      then("the count shows 2"),
       and("counter.gleam is restored and the browser is closed"),
     ]),
   ])
