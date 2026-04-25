@@ -10,6 +10,7 @@ import gleam/option.{type Option, None, Some, map}
 import gleam/string
 import simplifile
 import hot_skeleton/css_bust_hub
+import hot_skeleton/dev_log
 import hot_skeleton/hot_reload
 import hot_skeleton/server as hot_server
 import lustre.{
@@ -79,9 +80,13 @@ fn build_http_handler_with_runtime(
   let http_handler = fn(req: Request(mist.Connection)) {
     let segments = request.path_segments(req)
     let path = "/" <> string.join(segments, "/")
-    woof.info("http", [
-      woof.str("event", hot_server.http_method(req.method) <> " " <> path),
-    ])
+    case dev_log.is_debug() {
+      True ->
+        woof.info("http", [
+          woof.str("event", hot_server.http_method(req.method) <> " " <> path),
+        ])
+      False -> Nil
+    }
     case req.method, segments {
       http.Get, [] -> serve_index()
       http.Get, ["app.css"] -> serve_app_css()
@@ -255,7 +260,13 @@ fn serve_css_bust(
     }
     let t0 = hot_reload.css_cache_bust()
     let _ = mist.send_text_frame(connection, t0)
-    let _ = io.println("CSS cache bust (__hot_css initial frame) t=" <> t0)
+    case dev_log.is_debug() {
+      True -> {
+        let _ = io.println("CSS cache bust (__hot_css initial frame) t=" <> t0)
+        Nil
+      }
+      False -> Nil
+    }
     let sel = process.new_selector() |> process.select(bust)
     #(CssHmrState(hub, id), Some(sel))
   }

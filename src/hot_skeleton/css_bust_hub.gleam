@@ -4,6 +4,7 @@ import gleam/io
 import gleam/list
 import gleam/otp/actor
 import gleam/result
+import hot_skeleton/dev_log
 
 type State {
   State(next_id: Int, clients: List(#(Int, process.Subject(String))))
@@ -31,12 +32,18 @@ fn handle_message(state: State, msg: Message) -> actor.Next(State, Message) {
     }
     DoPush(t) -> {
       let n = list.length(state.clients)
-      io.println(
-        "CSS cache bust (hub → "
-        <> int.to_string(n)
-        <> " ws client(s)) t="
-        <> t,
-      )
+      case dev_log.is_debug() {
+        True -> {
+          io.println(
+            "CSS cache bust (hub → "
+            <> int.to_string(n)
+            <> " ws client(s)) t="
+            <> t,
+          )
+          Nil
+        }
+        False -> Nil
+      }
       list.each(state.clients, fn(p) { process.send(p.1, t) })
       actor.continue(state)
     }

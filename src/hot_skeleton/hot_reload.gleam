@@ -6,6 +6,10 @@
 //// `component_wrapper`) so `/app.css`’s `?t=` cache-bust can update
 //// in place.
 ////
+//// **Logging:** by default only `Gleam: recompiled: …` and `Tailwind: rebuilt`
+//// lines are printed. Set `HOT_SKELETON_LOG=debug` for the previous verbose
+//// output (timings, per-request HTTP, CSS hub). See [`dev_log.is_debug`].
+////
 //// Lustre stores `update`/`view` as function references in the runtime
 //// actor's state. For hot-swap to take effect on the next message, those
 //// references must be **cross-module** (external) fun refs — Erlang's
@@ -37,6 +41,7 @@ import gleam/int
 import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import hot_skeleton/dev_log
 import radiate
 import simplifile
 import tailwind
@@ -74,26 +79,38 @@ pub fn wrap(
     |> radiate.add_dir(src_dir)
     |> radiate.on_reload(fn(_state, path) {
       let t_handler0 = monotonic_ms()
-      io.println("Change in " <> path <> ", reloading.")
+      case dev_log.is_debug() {
+        True -> io.println("Change in " <> path <> ", reloading.")
+        False -> Nil
+      }
       case after_modules_loaded {
         Some(f) -> {
-          let t_beam0 = monotonic_ms()
-          f()
-          let t_beam1 = monotonic_ms()
-          io.println(
-            "Hot reload timing: after_modules_loaded (beam/Lustre) "
-            <> int.to_string(t_beam1 - t_beam0)
-            <> "ms",
-          )
+          case dev_log.is_debug() {
+            True -> {
+              let t_beam0 = monotonic_ms()
+              f()
+              let t_beam1 = monotonic_ms()
+              io.println(
+                "Hot reload timing: after_modules_loaded (beam/Lustre) "
+                <> int.to_string(t_beam1 - t_beam0)
+                <> "ms",
+              )
+            }
+            False -> f()
+          }
         }
         None -> Nil
       }
       let t_handler1 = monotonic_ms()
-      io.println(
-        "Hot reload timing: on_reload callback "
-        <> int.to_string(t_handler1 - t_handler0)
-        <> "ms (beam only; tailwind is a separate watch process)",
-      )
+      case dev_log.is_debug() {
+        True ->
+          io.println(
+            "Hot reload timing: on_reload callback "
+            <> int.to_string(t_handler1 - t_handler0)
+            <> "ms (beam only; tailwind is a separate watch process)",
+          )
+        False -> io.println("Gleam: recompiled: " <> path)
+      }
       Nil
     })
     |> radiate.start()
@@ -199,34 +216,54 @@ fn tailwind_done_loop(
     post_m == pre_m && post_s == pre_s
   {
     True -> {
-      io.println(
-        "Tailwind watch: output mtime+size still matches pre snapshot; skipped ffi poll.",
-      )
+      case dev_log.is_debug() {
+        True ->
+          io.println(
+            "Tailwind watch: output mtime+size still matches pre snapshot; skipped ffi poll.",
+          )
+        False -> Nil
+      }
       #(0, 0)
     }
     False -> wait_for_css_write_complete(pre_m, pre_s)
   }
   let t_after = monotonic_ms()
-  io.println(
-    "Tailwind timing (watch): ffi_wait_changed "
-    <> int.to_string(wait_changed_ms)
-    <> "ms, ffi_wait_settled "
-    <> int.to_string(wait_settled_ms)
-    <> "ms, total_to_stable "
-    <> int.to_string(t_after - t0)
-    <> "ms",
-  )
-  io.println("Tailwind watch: compiled .hot_skeleton/tailwind.css")
+  case dev_log.is_debug() {
+    True ->
+      io.println(
+        "Tailwind timing (watch): ffi_wait_changed "
+        <> int.to_string(wait_changed_ms)
+        <> "ms, ffi_wait_settled "
+        <> int.to_string(wait_settled_ms)
+        <> "ms, total_to_stable "
+        <> int.to_string(t_after - t0)
+        <> "ms",
+      )
+    False -> Nil
+  }
+  case dev_log.is_debug() {
+    True -> io.println("Tailwind watch: compiled .hot_skeleton/tailwind.css")
+    False -> io.println("Tailwind: rebuilt")
+  }
   case after {
     Some(f) -> {
       let t = css_cache_bust()
-      io.println("CSS cache bust (after tailwind watch, before hub) t=" <> t)
+      case dev_log.is_debug() {
+        True -> io.println("CSS cache bust (after tailwind watch, before hub) t=" <> t)
+        False -> Nil
+      }
       let t_hub0 = monotonic_ms()
       f()
       let t_hub1 = monotonic_ms()
-      io.println(
-        "Tailwind timing: hub / cache-bust notify " <> int.to_string(t_hub1 - t_hub0) <> "ms",
-      )
+      case dev_log.is_debug() {
+        True ->
+          io.println(
+            "Tailwind timing: hub / cache-bust notify "
+            <> int.to_string(t_hub1 - t_hub0)
+            <> "ms",
+          )
+        False -> Nil
+      }
     }
     None -> Nil
   }
