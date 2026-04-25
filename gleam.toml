@@ -33,4 +33,4 @@ chrobot = ">= 4.0.0 and < 5.0.0"
 
 [tools.tailwind]
 version = "4.2.4"
-args = ["-i=./app.tailwind.css", "-o=./.hot_skeleton/tailwind.css"]
+args = ["-i=./src/tw-entry.css", "-o=./.hot_skeleton/tailwind.css"]

@@ -1,5 +1,8 @@
 //// Run the Tailwind CLI in watch mode: install the binary, ensure an input
 //// file, emit CSS, and report [`Event`]s (colored line + output path on each build).
+//// For [`config_hot_skeleton`], a root `app.tailwind.css` is **not** used for the
+//// CLI (so `--cwd=src` + `src/tw-entry.css` is not replaced by a project-root `-i`).
+//// `src/tw-entry.css` is still **written** even when `app.tailwind.css` exists.
 
 import gleam/bit_array
 import gleam/dynamic.{type Dynamic}
@@ -38,12 +41,15 @@ pub fn default_config() -> Config {
   )
 }
 
-/// Paths under `.hot_skeleton/` for an HMR-style app layout.
+/// Host layout: **entry in `src/`** (not under `.hot_skeleton/`) so the CLI can run
+/// with [`--cwd` `src`]: Tailwind/Parcel otherwise subscribe the whole project root
+/// ([tailwindcss#15750](https://github.com/tailwindlabs/tailwindcss/issues/15750);
+/// [`@source not`](https://tailwindcss.com/docs) does not shrink native watches).
 pub fn config_hot_skeleton() -> Config {
   Config(
     cli_path: "./build/bin/tailwindcss",
     app_input: None,
-    generated_input: ".hot_skeleton/tailwind-input.css",
+    generated_input: "src/tw-entry.css",
     output_css: ".hot_skeleton/tailwind.css",
     log_built_to_stdout: True,
   )
@@ -116,6 +122,11 @@ fn parent_dir(path: String) -> String {
   }
 }
 
+fn file_name(path: String) -> String {
+  let parts = string.split(path, on: "/") |> list.filter(fn(s) { s != "" })
+  result.unwrap(list.last(parts), path)
+}
+
 fn common_prefix_len_strings(a: List(String), b: List(String)) -> Int {
   case a, b {
     [x, ..xa], [y, ..ya] if x == y -> 1 + common_prefix_len_strings(xa, ya)
@@ -162,55 +173,121 @@ fn relpath_from_dir_to_file(from_dir: String, to_file: String) -> String {
   }
 }
 
-fn source_scan_line(input_dir: String) -> String {
+/// Positive globs: only this tree and `../dev` (see README).
+/// When the entry file lives in `src/`, use `@source "."` so the watch graph is
+/// tied to that directory, not a broad `../src`.
+fn source_only_src_and_dev(input_dir: String) -> String {
   case input_dir {
-    "." -> "@source \"./src\";"
-    _ -> "@source \"../src\";"
+    // Entry is `src/tw-*.css`: scan this folder + sibling `dev/`.
+    "src" -> "@source \".\";\n@source \"../dev\";\n"
+    "." -> "@source \"./src\";\n@source \"./dev\";\n"
+    _ -> "@source \"../src\";\n@source \"../dev\";\n"
   }
+}
+
+/// Tool / artifact dirs the CLI was still fs-watching; `@source` alone did not
+/// stop `build/**` (e.g. Gleam LSP `build/lsp/...`) from receiving watcher edges.
+fn source_not_noisy_roots(input_dir: String) -> String {
+  // Paths relative to the entry file (Tw v4), same as `relpath` for top-level names.
+  let to_build = relpath_from_dir_to_file(input_dir, "build")
+  let to_nm = relpath_from_dir_to_file(input_dir, "node_modules")
+  "@source not \""
+  <> to_build
+  <> "\";\n@source not \""
+  <> to_nm
+  <> "\";\n"
 }
 
 fn generated_entry_css(config: Config) -> String {
   let input_dir = parent_dir(config.generated_input)
   let not_to_out = relpath_from_dir_to_file(input_dir, config.output_css)
-  let scan = source_scan_line(input_dir)
+  let not_noise = source_not_noisy_roots(input_dir)
+  let scan = source_only_src_and_dev(input_dir)
   "@import \"tailwindcss\" source(none);\n@source not \""
   <> not_to_out
   <> "\";\n"
+  <> not_noise
   <> scan
-  <> "\n"
+}
+
+/// Bump when `build` was not in `@source not` (LSP / Gleam `build/**` was watched).
+fn needs_generated_entry_migration(content: String) -> Bool {
+  let has_v4 = string.contains(content, "source(none)")
+  let has_build_not =
+    string.contains(content, "@source not \"../build")
+    || string.contains(content, "@source not \"./build")
+  has_v4 && !has_build_not
+}
+
+/// Older template: only `src/`, not `dev/`.
+fn needs_dev_source_migration(content: String) -> Bool {
+  let has_v4 = string.contains(content, "source(none)")
+  let has_dev =
+    string.contains(content, "@source \"../dev\"")
+    || string.contains(content, "@source \"./dev\"")
+  has_v4 && !has_dev
+}
+
+/// After moving the host entry to `src/tw-entry.css`, `@source` must use `.` not `../src`.
+fn needs_entry_in_src_cwd_shape(config: Config, content: String) -> Bool {
+  case config.generated_input {
+    "src/tw-entry.css" -> {
+      let has_v4 = string.contains(content, "source(none)")
+      let has_dot =
+        string.contains(content, "@source \".\";\n")
+        || string.contains(content, "@source \".\";")
+      has_v4 && !has_dot
+    }
+    _ -> False
+  }
 }
 
 fn ensure_input_file(config: Config) -> Nil {
+  // Old layout: input under `.hot_skeleton/`; new: `src/tw-entry.css` + `--cwd=src`
+  case config.generated_input == "src/tw-entry.css" {
+    True -> {
+      let _ = case simplifile.is_file(".hot_skeleton/tailwind-input.css") {
+        Ok(True) -> simplifile.delete(".hot_skeleton/tailwind-input.css")
+        _ -> Ok(Nil)
+      }
+      Nil
+    }
+    False -> Nil
+  }
   case config.app_input {
     Some(f) -> {
       let _ = simplifile.create_directory_all(parent_dir(f))
       Nil
     }
     None ->
-      case simplifile.is_file("app.tailwind.css") {
-        Ok(True) -> Nil
-        _ -> {
-          let _ = simplifile.create_directory_all(parent_dir(config.generated_input))
-          case simplifile.is_file(config.generated_input) {
-            Ok(True) -> {
-              // Migrate old single-line default so v4 does not re-watch the output file.
-              case simplifile.read(config.generated_input) {
-                Ok(content) ->
-                  case content == legacy_default_input {
-                    True -> {
-                      let _ =
-                        simplifile.write(
-                          config.generated_input,
-                          generated_entry_css(config),
-                        )
-                      Nil
-                    }
-                    False -> Nil
-                  }
-                _ -> Nil
-              }
-            }
-            _ -> {
+      // `app.tailwind.css` used to skip **all** generation; then `src/tw-entry.css`
+      // never existed while `gleam dev` still passed `-i=tw-entry.css --cwd=src`.
+      case
+        config.generated_input == "src/tw-entry.css"
+        || case simplifile.is_file("app.tailwind.css") {
+          Ok(True) -> False
+          _ -> True
+        }
+      {
+        True -> ensure_generated_input_file(config)
+        False -> Nil
+      }
+  }
+}
+
+fn ensure_generated_input_file(config: Config) -> Nil {
+  let _ = simplifile.create_directory_all(parent_dir(config.generated_input))
+  case simplifile.is_file(config.generated_input) {
+    Ok(True) -> {
+      case simplifile.read(config.generated_input) {
+        Ok(content) ->
+          case
+            content == legacy_default_input
+            || needs_generated_entry_migration(content)
+            || needs_dev_source_migration(content)
+            || needs_entry_in_src_cwd_shape(config, content)
+          {
+            True -> {
               let _ =
                 simplifile.write(
                   config.generated_input,
@@ -218,25 +295,72 @@ fn ensure_input_file(config: Config) -> Nil {
                 )
               Nil
             }
+            False -> Nil
           }
-        }
+        _ -> Nil
+      }
+    }
+    _ -> {
+      let _ =
+        simplifile.write(
+          config.generated_input,
+          generated_entry_css(config),
+        )
+      Nil
+    }
+  }
+}
+
+/// `./app.tailwind.css` at the repo root makes the CLI use **project cwd** (broad
+/// Parcel watch). [`config_hot_skeleton`] uses `src/tw-entry.css` + `--cwd=src`
+/// instead — that path must win for `gleam dev` so `build/` is not under the
+/// subscription root ([tailwindcss#15750](https://github.com/tailwindlabs/tailwindcss/issues/15750)).
+fn use_app_tailwind_for_cli(config: Config) -> Bool {
+  case config.app_input {
+    Some(_) -> False
+    None ->
+      case config.generated_input == "src/tw-entry.css" {
+        True -> False
+        False ->
+          case simplifile.is_file("app.tailwind.css") {
+            Ok(True) -> True
+            _ -> False
+          }
       }
   }
 }
 
 fn watch_cli_args(config: Config) -> List(String) {
-  let i = case config.app_input {
-    Some(p) -> "-i=" <> p
+  case config.app_input {
+    Some(p) -> ["-i=" <> p, "-o=./" <> config.output_css, "-w=always"]
     None ->
-      case simplifile.is_file("app.tailwind.css") {
-        Ok(True) -> "-i=./app.tailwind.css"
-        _ -> {
+      case use_app_tailwind_for_cli(config) {
+        True -> [
+          "-i=./app.tailwind.css",
+          "-o=./" <> config.output_css,
+          "-w=always",
+        ]
+        False -> {
           let _ = ensure_input_file(config)
-          "-i=./" <> config.generated_input
+          let base = parent_dir(config.generated_input)
+          let in_name = file_name(config.generated_input)
+          let o_rel = relpath_from_dir_to_file(base, config.output_css)
+          case base == "." {
+            True -> [
+              "-i=./" <> config.generated_input,
+              "-o=./" <> config.output_css,
+              "-w=always",
+            ]
+            False -> [
+              "-i=" <> in_name,
+              "-o=" <> o_rel,
+              "-w=always",
+              "--cwd=./" <> base,
+            ]
+          }
         }
       }
   }
-  [i, "-o=./" <> config.output_css, "-w=always"]
 }
 
 fn watch_worker(config: Config, on_event: fn(Event) -> Nil) {

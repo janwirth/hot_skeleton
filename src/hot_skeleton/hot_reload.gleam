@@ -5,6 +5,10 @@
 //// **Logging (default):** `Gleam: <N>ms src/...` and colored Tailwind lines.
 //// `HOT_SKELETON_LOG=debug` for verbose. See [`dev_log.is_debug`].
 ////
+//// **Tailwind:** watch uses `src/tw-entry.css` with `tailwind_wrapper`’s `--cwd=src` layout,
+//// not `./app.tailwind.css` (a root `app` file would re-widen the Parcel watcher). The
+//// entry file is always materialized under `src/` even when `app.tailwind.css` exists.
+////
 //// Lustre stores `update`/`view` as function references; use cross-module
 //// calls for hot-swap. See [`examples/counter`](../examples/counter.gleam).
 
@@ -18,7 +22,7 @@ import radiate
 import simplifile
 import tailwind_wrapper as tw
 
-const default_input_rel = ".hot_skeleton/tailwind-input.css"
+const default_input_rel = "src/tw-entry.css"
 
 /// Same paths as [`tailwind_wrapper.config_hot_skeleton`]; align `[tools.tailwind]`.
 fn twc() -> tw.Config {

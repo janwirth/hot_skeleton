@@ -44,7 +44,7 @@ pub fn view(model: Model) -> Element(Message) {
 
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [
+    html.div([attribute.class("flex justify-between gap-3 items-center bg-green-100")], [
       
       view_button(label: "-", on_click: UserClickedDecrement),
       html.p([], [html.text("Counter: "), html.text(count)]),
@@ -57,7 +57,7 @@ pub fn view_nonrecursive(model: Model) -> Element(Message) {
   let count = int.to_string(model)
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [
+    html.div([attribute.class("flex justify-between gap-3 items-center bg-reed-100")], [
       view_button(label: "-", on_click: UserClickedDecrement),
       html.p([], [html.text("Counter: "), html.text(count)]),
       view_button(label: "+", on_click: UserClickedIncrement),

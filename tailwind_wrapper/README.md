@@ -1,6 +1,8 @@
 # tailwind_wrapper
 
-Gleam helper that spawns a **Tailwind CSS v3** watch (via the official standalone CLI) and reports events to a callback.
+Gleam helper that spawns a **Tailwind CSS v4** watch (via the official standalone CLI) and reports events to a callback.
+
+`config_hot_skeleton` puts the **entry under `src/`** (e.g. `src/tw-entry.css`) and spawns the CLI with **`--cwd=src`**, `‑i=tw-entry.css`, and `‑o` / `‑o` as paths **relative to that directory**. That narrows the native file watcher: Tailwind/Parcel can still subscribe a broad tree ([upstream issue](https://github.com/tailwindlabs/tailwindcss/issues/15750)); `source(none)` + `@source not` do **not** stop those watches. The generated CSS also uses `source(none)`, `@source` (under `src` and `../dev`), and `@source not` for the output, `build/`, and `node_modules/`.
 
 ## Use
 
@@ -25,7 +27,7 @@ pub fn main() {
 }
 ```
 
-- **Config:** `input_glob` (e.g. `"./src/**/*.gleam"`), `output_css` (e.g. `"priv/tailwind.css"`), `cwd` (project root; required on macOS for fsevents).
+- **Config:** `generated_input`, `output_css`, and optional `app_input`; see `default_config` / `config_hot_skeleton`.
 - **Output path:** `tw.output_path_for(config)` and `tw.css_cache_bust(config)`.
 
 ## Debug CLI (log events to a file)
