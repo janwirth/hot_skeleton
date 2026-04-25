@@ -3,6 +3,7 @@
 //// cross-module (external) fun refs — see the note in `counter.gleam`
 //// for why that matters for hot code reloading.
 
+import lustre
 import gleam/int
 import lustre/attribute
 import lustre/element.{type Element}
@@ -41,6 +42,19 @@ pub fn dev_rerender_message() -> Message {
 pub fn view(model: Model) -> Element(Message) {
   let count = int.to_string(model)
 
+  element.fragment([
+    html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
+    html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [
+      
+      view_button(label: "-", on_click: UserClickedDecrement),
+      html.p([], [html.text("Counter: "), html.text(count)]),
+      view_button(label: "+", on_click: UserClickedIncrement),
+      element.element("my-counter", [attribute.class("bg-orange-100")], [])
+    ]),
+  ])
+}
+pub fn view_nonrecursive(model: Model) -> Element(Message) {
+  let count = int.to_string(model)
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
     html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [

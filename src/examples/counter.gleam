@@ -11,6 +11,8 @@
 //// time, so they never hot-swap. Splitting into two modules is the
 //// cheapest way to opt into hot-reloadable `update`/`view`.
 
+import gleam/string
+import gleam/io
 import examples/counter/logic
 import lustre.{type App}
 
@@ -23,3 +25,10 @@ pub type Message =
 pub fn component() -> App(Nil, Model, Message) {
   lustre.simple(logic.init, logic.update, logic.view)
 }
+
+pub fn register() {
+  let app = lustre.simple(logic.init, logic.update, logic.view_nonrecursive)
+  let res = lustre.register(app, "my-counter")
+  io.print(string.inspect(res))
+}
+  
