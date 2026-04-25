@@ -7,11 +7,19 @@ minimal boilerplate.
   `src/hot_skeleton_dev.gleam` wraps the server with
   `src/hot_skeleton/hot_reload.gleam`, which runs
   [radiate](https://hexdocs.pm/radiate) against an absolute path to the
-  project `src/` (required for fsevents on macOS). When you edit a
-  component, radiate recompiles and hot-loads the new module. The
-  browser is **not** refreshed; the WebSocket stays open and the
+  project `src/` (required for fsevents on macOS) and
+  [tailwind\_wrapper](tailwind_wrapper/) to watch and rebuild CSS. When
+  you edit a component, radiate recompiles and hot-loads the new module.
+  The browser is **not** refreshed; the WebSocket stays open and the
   lustre-server-component actor's in-memory model survives the swap —
   the next message it handles dispatches into the new code.
+
+- **Logging:** The server always prints a boot line
+  (`[hot_skeleton] listening on …` and, when the Tailwind watch is
+  ready, `[hot_skeleton] tailwind -> …`). For extra dev detail (HTTP
+  lines, timings, HMR), set `HOT_SKELETON_LOG=debug`. To log only
+  `tailwind_wrapper` events to a file, run the package CLI (see
+  `tailwind_wrapper/README.md`).
 
 - **Production (no reloader):** `gleam run` — `src/hot_skeleton.gleam`.
 

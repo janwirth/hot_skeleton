@@ -5,6 +5,7 @@
 
 import envoy
 import gleam/bytes_tree
+import gleam/io
 import gleam/erlang/application
 import gleam/erlang/process.{sleep_forever}
 import gleam/http
@@ -34,6 +35,7 @@ pub fn start(
   woof.info("boot", [
     woof.str("event", "listening on 0.0.0.0:" <> int.to_string(port)),
   ])
+  io.println("[hot_skeleton] listening on 0.0.0.0:" <> int.to_string(port))
   sleep_forever()
 }
 

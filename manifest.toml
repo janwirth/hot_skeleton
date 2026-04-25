@@ -35,6 +35,7 @@ packages = [
   { name = "shellout", version = "1.8.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "shellout", source = "hex", outer_checksum = "C416356D45151F298108C9DB9CD1EDE0313F620B5EDBB5766CD7237659D87841" },
   { name = "simplifile", version = "2.4.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "7C18AFA4FED0B4CE1FA5B0B4BAC1FA1744427054EA993565F6F3F82E5453170D" },
   { name = "spinner", version = "1.3.1", build_tools = ["gleam"], requirements = ["gleam_community_ansi", "gleam_stdlib", "glearray", "repeatedly"], otp_app = "spinner", source = "hex", outer_checksum = "21BDE7FF9D7D9ACBB4086C0D5C86F0A90CE6B0F3CB593B41D03384AE7724B5B4" },
+  { name = "tailwind_wrapper", version = "1.0.0", build_tools = ["gleam"], requirements = ["glailglind", "gleam_erlang", "gleam_stdlib", "simplifile"], source = "local", path = "tailwind_wrapper" },
   { name = "tom", version = "2.0.2", build_tools = ["gleam"], requirements = ["gleam_stdlib", "gleam_time"], otp_app = "tom", source = "hex", outer_checksum = "234A842F3D087D35737483F5DFB6DE9839E3366EF0CAF8726D2D094210227670" },
   { name = "woof", version = "1.5.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "woof", source = "hex", outer_checksum = "6658806334AD21D3CCCF60B5FCC2653AD04688B9A9537DE827A809C0F93A3575" },
 ]
@@ -43,7 +44,6 @@ packages = [
 chrobot = { version = ">= 4.0.0 and < 5.0.0" }
 dream_test = { version = ">= 1.2.0 and < 2.0.0" }
 envoy = { version = ">= 1.2.0 and < 2.0.0" }
-glailglind = { version = ">= 2.3.0 and < 3.0.0" }
 gleam_erlang = { version = ">= 1.3.0 and < 2.0.0" }
 gleam_http = { version = ">= 4.3.0 and < 5.0.0" }
 gleam_json = { version = ">= 3.1.0 and < 4.0.0" }
@@ -54,4 +54,5 @@ lustre = { version = ">= 5.6.0 and < 6.0.0" }
 mist = { version = ">= 6.0.3 and < 7.0.0" }
 radiate = { version = ">= 1.0.0 and < 2.0.0" }
 simplifile = { version = ">= 2.4.0 and < 3.0.0" }
+tailwind_wrapper = { path = "./tailwind_wrapper" }
 woof = { version = ">= 1.5.0 and < 2.0.0" }

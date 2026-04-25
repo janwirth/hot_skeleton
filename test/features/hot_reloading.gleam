@@ -45,7 +45,6 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import hot_skeleton/component_wrapper
 import simplifile
 
 const counter_path = "src/examples/counter/logic.gleam"

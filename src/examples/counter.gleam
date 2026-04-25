@@ -21,16 +21,5 @@ pub type Message =
   logic.Message
 
 pub fn component() -> App(Nil, Model, Message) {
-  lustre.application(logic.init, logic.update, logic.view)
-}
-import lustre/element
-
-pub fn comp() {
-  lustre.component(logic.init, logic.update, logic.view, [])
-}
-
-pub const element_name = "my-counter"
-
-pub fn register() {
-  lustre.register(comp(), element_name)
+  lustre.simple(logic.init, logic.update, logic.view)
 }
