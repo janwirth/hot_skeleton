@@ -1,18 +1,14 @@
 import examples/counter
 import examples/counter/logic
-import gleam/option.{Some}
 import hot_skeleton/component_wrapper
-import lustre
 
 /// Development: run with `gleam dev`. Uses [`hot_reload`](./hot_skeleton/hot_reload.gleam) —
-/// same as in [`start_hot_server_with_wrap`](../hot_skeleton/component_wrapper.gleam), plus
+/// same as [`start_hot_server`](../hot_skeleton/component_wrapper.gleam), plus
 /// a post-reload `dispatch` so the singleton Lustre runtime remounts vdom for new clients.
 pub fn main() -> Nil {
-  component_wrapper.start_hot_server_with_wrap(
+  component_wrapper.start_hot_server(
     counter.component,
     8080,
-    fn(h) { h },
-    logic.dev_rerender_message
-
+    logic.dev_rerender_message,
   )
 }

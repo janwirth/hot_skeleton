@@ -28,22 +28,16 @@ pub type HttpHandler =
   fn(Request(mist.Connection)) -> Response(mist.ResponseData)
 
 /// Lustre server component on `/`, WebSocket on `/ws`. The same handler is
-/// used in production and in dev. In dev, run [`start_hot_server_dev`] or pass
-/// [`reload.wrap`](https://hexdocs.pm/mist_reload/mist/reload.html#wrap) so
-/// the browser and Erlang get hot updates from [mist_reload](https://github.com/CrowdHailer/mist_reload).
-// pub fn start_hot_server(make_app: fn() -> App(Nil, model, message)) -> Nil {
-//   start_hot_server_with_wrap(make_app, 8080, fn(h) { h }, None)
-// }
+/// used in production and in dev.
 
 /// `on_beam_modules_loaded`: after [radiate] runs `gleam build` and loads new
 /// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
 /// [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch) a
 /// no-op message so `view` runs again; otherwise new WebSocket clients keep
 /// receiving the vdom cached before the code swap.
-pub fn start_hot_server_with_wrap(
+pub fn start_hot_server(
   make_app: fn() -> App(Nil, model, message),
   default_port: Int,
-  mist_wrap: fn(HttpHandler) -> HttpHandler,
   reload_msg: fn() -> message,
 ) -> Nil {
 
@@ -62,8 +56,7 @@ pub fn start_hot_server_with_wrap(
   let #(base, runtime) = build_http_handler_with_runtime(make_app, hub)
   let after: Option(fn() -> Nil) =
     map(Some(on_beam_modules_loaded), fn(f) { fn() { f(runtime) } })
-  let base = hot_reload.wrap(base, after, Some(on_tailwind))
-  let handle = mist_wrap(base)
+  let handle = hot_reload.wrap(base, after, Some(on_tailwind))
   hot_server.start(port, handle)
 }
 

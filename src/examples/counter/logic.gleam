@@ -19,16 +19,20 @@ pub opaque type Message {
   /// a BEAM code load so singleton server components remount with fresh vdom.
   DevRerenderView
 }
+import lustre/effect.{type Effect}
 
-pub fn init(_: Nil) -> Model {
-  0
+pub fn init(_: Nil) -> #(Model, Effect(Message)) {
+  #(0, effect.none())
 }
 
-pub fn update(model: Model, message: Message) -> Model {
+pub fn update(model: Model, message: Message) -> #(Model, Effect(Message)) {
   case message {
     UserClickedIncrement -> model + 1
     UserClickedDecrement -> model - 1
     DevRerenderView -> model
+  }
+  |> fn(model) {
+    #(model, effect.none())
   }
 }
 
@@ -43,7 +47,7 @@ pub fn view(model: Model) -> Element(Message) {
 
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [
+    html.div([attribute.class("flex justify-between gap-3 items-center bg-orange-100")], [
       view_button(label: "-", on_click: UserClickedDecrement),
       html.p([], [html.text("Counter: "), html.text(count)]),
       view_button(label: "+", on_click: UserClickedIncrement),

@@ -1,10 +1,7 @@
 //// HTTP helpers for a mist web server: port, static files, 404, etc.
 ////
-//// Live development reload and browser refresh are provided by
-//// [`mist_reload`][1] in dev: see `src/hot_skeleton_dev.gleam` and `reload.wrap`
-//// in [`CrowdHailer/mist_reload`][1].
-////
-//// [1]: https://github.com/CrowdHailer/mist_reload
+//// Hot reload in dev is built on [`hot_reload`](../hot_reload.gleam) in
+//// [`component_wrapper`](./component_wrapper.gleam) and the dev entrypoint.
 
 import envoy
 import gleam/bytes_tree
@@ -21,8 +18,8 @@ import mist
 import woof
 
 /// [`mist.new`] accepts a handler `fn(Request(mist.Connection)) -> Response(mist.ResponseData)`.
-/// Pass it the result of [`component_wrapper`](./component_wrapper.gleam) plus an optional
-/// `reload.wrap` from the mist_reload package in dev.
+/// [`component_wrapper.start_hot_server`](./component_wrapper.gleam#start_hot_server) passes the
+/// [`hot_reload`](./hot_reload.gleam)-wrapped handler.
 pub fn start(
   port: Int,
   handle: fn(request.Request(mist.Connection)) ->
