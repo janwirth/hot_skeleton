@@ -2,11 +2,14 @@ import gleam/bytes_tree
 import gleam/erlang/application
 import gleam/erlang/process
 import gleam/http
+import gleam/io
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/json
 import gleam/option.{type Option, None, Some, map}
 import gleam/string
+import simplifile
+import hot_skeleton/css_bust_hub
 import hot_skeleton/hot_reload
 import hot_skeleton/server as hot_server
 import lustre.{
@@ -32,7 +35,7 @@ pub type HttpHandler =
 //   start_hot_server_with_wrap(make_app, 8080, fn(h) { h }, None)
 // }
 
-/// `on_beam_modules_loaded`: after radiate runs `gleam build` and loads new
+/// `on_beam_modules_loaded`: after [radiate] runs `gleam build` and loads new
 /// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
 /// [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch) a
 /// no-op message so `view` runs again; otherwise new WebSocket clients keep
@@ -48,11 +51,18 @@ pub fn start_hot_server_with_wrap(
     lustre.send(r, lustre.dispatch(reload_msg()))
   }
 
+  let assert Ok(hub) = css_bust_hub.start()
+  let on_tailwind = fn() {
+    process.send(
+      hub,
+      css_bust_hub.DoPush(t: hot_reload.css_cache_bust()),
+    )
+  }
   let port = hot_server.resolve_port(default_port)
-  let #(base, runtime) = build_http_handler_with_runtime(make_app)
+  let #(base, runtime) = build_http_handler_with_runtime(make_app, hub)
   let after: Option(fn() -> Nil) =
     map(Some(on_beam_modules_loaded), fn(f) { fn() { f(runtime) } })
-  let base = hot_reload.wrap(base, after)
+  let base = hot_reload.wrap(base, after, Some(on_tailwind))
   let handle = mist_wrap(base)
   hot_server.start(port, handle)
 }
@@ -66,6 +76,7 @@ type ComponentSocketMessage(msg) =
 
 fn build_http_handler_with_runtime(
   make_app: fn() -> App(Nil, model, message),
+  hub: process.Subject(css_bust_hub.Message),
 ) -> #(HttpHandler, Runtime(message)) {
   let app = make_app()
   let assert Ok(singleton) = start_server_component(app, Nil)
@@ -81,7 +92,9 @@ fn build_http_handler_with_runtime(
     case req.method, segments {
       http.Get, [] -> serve_index()
       http.Get, ["app.css"] -> serve_app_css()
+      http.Get, ["__hot_css"] -> serve_css_bust(req, hub)
       http.Get, ["ws"] -> serve_ws(req)
+      http.Get, ["hot_skeleton_hmr.mjs"] -> serve_hot_skeleton_hmr_mjs()
       http.Get, ["lustre-server-component.mjs"] -> serve_lustre_mjs()
       _, _ -> hot_server.not_found(path)
     }
@@ -90,13 +103,23 @@ fn build_http_handler_with_runtime(
 }
 
 fn index_document() -> String {
-  let t = hot_reload.css_cache_bust()
+  let initial_css = case simplifile.read(hot_reload.css_path_string()) {
+    Ok(s) -> s
+    Error(_) -> ""
+  }
   let head_children = [
     html.title([], "App"),
-    html.link([
-      attribute.rel("stylesheet"),
-      attribute.href("/app.css?t=" <> t),
-    ]),
+    html.style(
+      [attribute.id("hot-skeleton-app-css")],
+      initial_css,
+    ),
+    html.script(
+      [
+        attribute.type_("module"),
+        attribute.src("/hot_skeleton_hmr.mjs"),
+      ],
+      "",
+    ),
     html.script(
       [
         attribute.type_("module"),
@@ -113,8 +136,11 @@ fn index_document() -> String {
           [
             server_component.route("/ws"),
             server_component.method(server_component.WebSocket),
+            attribute.shadowrootmode("open"),
           ],
-          [],
+          [
+
+          ],
         ),
       ]),
     ])
@@ -134,6 +160,20 @@ fn serve_app_css() -> Response(mist.ResponseData) {
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", "text/css; charset=utf-8")
+      |> response.set_body(file)
+    Error(_) ->
+      response.new(404)
+      |> response.set_body(mist.Bytes(bytes_tree.new()))
+  }
+}
+
+fn serve_hot_skeleton_hmr_mjs() -> Response(mist.ResponseData) {
+  let assert Ok(priv) = application.priv_directory("hot_skeleton")
+  let file_path = priv <> "/static/hot_skeleton_hmr.mjs"
+  case mist.send_file(file_path, offset: 0, limit: None) {
+    Ok(file) ->
+      response.new(200)
+      |> response.prepend_header("content-type", "application/javascript")
       |> response.set_body(file)
     Error(_) ->
       response.new(404)
@@ -197,6 +237,54 @@ fn serve_component_websocket(
       to: component,
       message: server_component.deregister_subject(state.self),
     )
+  }
+  mist.websocket(request:, on_init:, handler:, on_close:)
+}
+
+type CssHmrState {
+  CssHmrState(
+    hub: process.Subject(css_bust_hub.Message),
+    id: Int,
+  )
+}
+
+fn serve_css_bust(
+  request: Request(mist.Connection),
+  hub: process.Subject(css_bust_hub.Message),
+) -> Response(mist.ResponseData) {
+  let on_init = fn(connection: mist.WebsocketConnection) {
+    let bust = process.new_subject()
+    let ack = process.new_subject()
+    process.send(hub, css_bust_hub.AddClient(bust, ack))
+    let id = case process.receive(ack, 2000) {
+      Ok(i) -> i
+      Error(_) -> 0
+    }
+    let t0 = hot_reload.css_cache_bust()
+    let _ = mist.send_text_frame(connection, t0)
+    let _ = io.println("CSS cache bust (__hot_css initial frame) t=" <> t0)
+    let sel = process.new_selector() |> process.select(bust)
+    #(CssHmrState(hub, id), Some(sel))
+  }
+  let handler = fn(
+    st: CssHmrState,
+    message: mist.WebsocketMessage(String),
+    connection: mist.WebsocketConnection,
+  ) {
+    case message {
+      mist.Text(_) | mist.Binary(_) -> mist.continue(st)
+      mist.Custom(t) -> {
+        let _ = mist.send_text_frame(connection, t)
+        mist.continue(st)
+      }
+      mist.Closed | mist.Shutdown -> mist.stop()
+    }
+  }
+  let on_close = fn(st: CssHmrState) {
+    case st.id {
+      0 -> Nil
+      _ -> process.send(st.hub, css_bust_hub.RmClient(st.id))
+    }
   }
   mist.websocket(request:, on_init:, handler:, on_close:)
 }

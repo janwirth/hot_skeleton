@@ -43,9 +43,9 @@ pub fn view(model: Model) -> Element(Message) {
 
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-red-500")], [
+    html.div([attribute.class("flex justify-between gap-3 items-center bg-blue-100")], [
       view_button(label: "-", on_click: UserClickedDecrement),
-      html.p([], [html.text("Count: "), html.text(count)]),
+      html.p([], [html.text("Counter: "), html.text(count)]),
       view_button(label: "+", on_click: UserClickedIncrement),
     ]),
   ])

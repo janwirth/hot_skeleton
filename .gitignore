@@ -3,6 +3,7 @@
 *.ez
 /build
 erl_crash.dump
+priv
 
 # Chrobot / tests
 chrome
