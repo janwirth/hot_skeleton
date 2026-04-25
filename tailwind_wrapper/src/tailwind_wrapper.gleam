@@ -9,11 +9,13 @@ import gleam/erlang/process.{type Selector}
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import simplifile
 import tailwind
 
-const default_input_source = "@import \"tailwindcss\";\n"
+/// Legacy one-line import (Tailwind v4 auto-scan could watch the built CSS; line decode was also wrong for `{tw_rebuild, Line}`).
+const legacy_default_input = "@import \"tailwindcss\";\n"
 
 pub type Config {
   Config(
@@ -117,6 +119,70 @@ fn parent_dir(path: String) -> String {
   }
 }
 
+fn common_prefix_len_strings(a: List(String), b: List(String)) -> Int {
+  case a, b {
+    [x, ..xa], [y, ..ya] if x == y -> 1 + common_prefix_len_strings(xa, ya)
+    _, _ -> 0
+  }
+}
+
+/// Unix-style relative path from a directory to a file (for `@source` paths in CSS).
+fn relpath_from_dir_to_file(from_dir: String, to_file: String) -> String {
+  let from_segs =
+    string.split(from_dir, on: "/")
+    |> list.filter(fn(s) { s != "" })
+  let to_segs =
+    string.split(to_file, on: "/")
+    |> list.filter(fn(s) { s != "" })
+  case list.length(to_segs) {
+    0 -> to_file
+    _ -> {
+      let file = result.unwrap(list.last(to_segs), "")
+      let to_dir_segs = list.take(to_segs, list.length(to_segs) - 1)
+      let common = common_prefix_len_strings(from_segs, to_dir_segs)
+      let n_up = list.length(from_segs) - common
+      let down = list.drop(to_dir_segs, common) |> list.append([file])
+      let ups = list.repeat("..", n_up) |> string.join(with: "/")
+      let mut_dns = string.join(down, with: "/")
+      // Same directory as the entry: Tailwind needs `./file`, not a bare name.
+      let mut_dns = case n_up == 0 {
+        True ->
+          case string.contains(mut_dns, "/") {
+            True -> mut_dns
+            False -> "./" <> mut_dns
+          }
+        False -> mut_dns
+      }
+      case ups {
+        "" -> mut_dns
+        _ ->
+          case mut_dns {
+            "" -> ups
+            _ -> ups <> "/" <> mut_dns
+          }
+      }
+    }
+  }
+}
+
+fn source_scan_line(input_dir: String) -> String {
+  case input_dir {
+    "." -> "@source \"./src\";"
+    _ -> "@source \"../src\";"
+  }
+}
+
+fn generated_entry_css(config: Config) -> String {
+  let input_dir = parent_dir(config.generated_input)
+  let not_to_out = relpath_from_dir_to_file(input_dir, config.output_css)
+  let scan = source_scan_line(input_dir)
+  "@import \"tailwindcss\" source(none);\n@source not \""
+  <> not_to_out
+  <> "\";\n"
+  <> scan
+  <> "\n"
+}
+
 fn ensure_input_file(config: Config) -> Nil {
   case config.app_input {
     Some(f) -> {
@@ -129,9 +195,30 @@ fn ensure_input_file(config: Config) -> Nil {
         _ -> {
           let _ = simplifile.create_directory_all(parent_dir(config.generated_input))
           case simplifile.is_file(config.generated_input) {
-            Ok(True) -> Nil
+            Ok(True) -> {
+              // Migrate old single-line default so v4 does not re-watch the output file.
+              case simplifile.read(config.generated_input) {
+                Ok(content) ->
+                  case content == legacy_default_input {
+                    True -> {
+                      let _ =
+                        simplifile.write(
+                          config.generated_input,
+                          generated_entry_css(config),
+                        )
+                      Nil
+                    }
+                    False -> Nil
+                  }
+                _ -> Nil
+              }
+            }
             _ -> {
-              let _ = simplifile.write(config.generated_input, default_input_source)
+              let _ =
+                simplifile.write(
+                  config.generated_input,
+                  generated_entry_css(config),
+                )
               Nil
             }
           }
@@ -167,21 +254,24 @@ fn watch_worker(config: Config, on_event: fn(Event) -> Nil) {
   watch_loop(config, on_event, sel, pre0, out_abs)
 }
 
+fn line_payload() {
+  decode.one_of(decode.string, [
+    decode.map(decode.bit_array, fn(b) {
+      result.unwrap(bit_array.to_string(b), "")
+    }),
+  ])
+}
+
+/// [`select_record`] passes the full `{tw_rebuild, Line}` (same as pre-extract
+/// `{hot_skeleton_tailwind_rebuilt, Line}`). Pre-extract code ignored the payload
+/// (`fn(_d) { Nil }`); we need the line from the second tuple position. Gleam
+/// [`decode.at`] uses **0-based** tuple indices (`element(Index + 1, Tuple)` in
+/// the stdlib), so `[1]` is the line, not `[2]`.
 fn decode_rebuild_line(d: Dynamic) -> String {
-  case decode.run(d, decode.bit_array) {
-    Ok(b) -> {
-      case bit_array.to_string(b) {
-        Ok(s) -> s
-        _ -> ""
-      }
-    }
-    _ -> {
-      case decode.run(d, decode.string) {
-        Ok(s) -> s
-        _ -> ""
-      }
-    }
-  }
+  result.unwrap(
+    decode.run(d, decode.at([1], line_payload())),
+    "",
+  )
 }
 
 fn watch_loop(
