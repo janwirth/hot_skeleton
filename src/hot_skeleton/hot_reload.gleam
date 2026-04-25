@@ -6,9 +6,9 @@
 //// `component_wrapper`) so `/app.css`’s `?t=` cache-bust can update
 //// in place.
 ////
-//// **Logging:** by default only `Gleam: recompiled: …` and `Tailwind: rebuilt`
-//// lines are printed. Set `HOT_SKELETON_LOG=debug` for the previous verbose
-//// output (timings, per-request HTTP, CSS hub). See [`dev_log.is_debug`].
+//// **Logging (default):** `Gleam: <N>ms src/...` and `Tailwind: Nms` (FFI
+//// rewrites `Done in` on the same line). `HOT_SKELETON_LOG=debug` for verbose.
+//// See [`dev_log.is_debug`].
 ////
 //// Lustre stores `update`/`view` as function references in the runtime
 //// actor's state. For hot-swap to take effect on the next message, those
@@ -109,7 +109,13 @@ pub fn wrap(
             <> int.to_string(t_handler1 - t_handler0)
             <> "ms (beam only; tailwind is a separate watch process)",
           )
-        False -> io.println("Gleam: recompiled: " <> path)
+        False ->
+          io.println(
+            "Gleam: "
+            <> int.to_string(t_handler1 - t_handler0)
+            <> "ms "
+            <> path_for_recompile_log(path),
+          )
       }
       Nil
     })
@@ -241,10 +247,6 @@ fn tailwind_done_loop(
       )
     False -> Nil
   }
-  case dev_log.is_debug() {
-    True -> io.println("Tailwind watch: compiled .hot_skeleton/tailwind.css")
-    False -> io.println("Tailwind: rebuilt")
-  }
   case after {
     Some(f) -> {
       let t = css_cache_bust()
@@ -275,6 +277,30 @@ fn absolute_src_dir() -> String {
   case string.ends_with(cwd, "/") {
     True -> cwd <> "src"
     False -> cwd <> "/src"
+  }
+}
+
+/// `src/...` relative to project root for default recompile log lines.
+fn path_for_recompile_log(absolute_path: String) -> String {
+  let base = get_cwd()
+  let prefix = case string.ends_with(base, "/") {
+    True -> base
+    False -> base <> "/"
+  }
+  case string.starts_with(absolute_path, prefix) {
+    True -> {
+      let n = string.length(prefix)
+      string.slice(
+        from: absolute_path,
+        at_index: n,
+        length: string.length(absolute_path) - n,
+      )
+    }
+    False ->
+      case string.split_once(absolute_path, on: "/src/") {
+        Ok(#(_, after)) -> "src/" <> after
+        Error(Nil) -> absolute_path
+      }
   }
 }
 

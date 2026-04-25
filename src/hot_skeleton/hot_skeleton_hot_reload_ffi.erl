@@ -107,8 +107,21 @@ read_mtime_size(Path) ->
             {0, 0}
     end.
 
+%% `tailwindcss` prints lines like "Done in 26ms" (stdout merged from port).
+%% Relabel to <<"Tailwind: ">>/<<"Tailwind:">> so timing, checkmarks, and ANSI
+%% on the line stay in place. `os:putenv("FORCE_COLOR", "1")` in init so the
+%% CLI still emits color when not a TTY.
+-spec format_tailwind_log_line(binary()) -> binary().
+format_tailwind_log_line(Line) ->
+    L1 = binary:replace(Line, <<"Done in ">>, <<"Tailwind: ">>, [global]),
+    case L1 =:= Line of
+        true -> binary:replace(Line, <<"Done in">>, <<"Tailwind:">>, [global]);
+        false -> L1
+    end.
+
 %% Spawn `tailwindcss` with `-w=always` and a port; on each line containing
-%% <<"Done in">>, notify Gleam: `{hot_skeleton_tailwind_rebuilt, Line}`.
+%% <<"Done in">>, notify Gleam: `{hot_skeleton_tailwind_rebuilt, Line}` and
+%% print the line with "Done in" relabeled to "Tailwind:" (same bytes elsewhere).
 %% Args are the same paths as the one-shot CLI (`-i=`, `-o=`) from Gleam.
 -spec start_tailwind_watch(Exe :: binary(), Args :: [binary()], NotifyPid :: pid()) -> ok.
 start_tailwind_watch(ExeBin, ArgBins, NotifyPid) when is_binary(ExeBin), is_list(ArgBins), is_pid(NotifyPid) ->
@@ -120,6 +133,9 @@ start_tailwind_watch(ExeBin, ArgBins, NotifyPid) when is_binary(ExeBin), is_list
     ok.
 
 tailwind_watch_init(Exe, Args, Pid) ->
+    %% Merging {env, [...]} into open_port replaced the *entire* child env; use
+    %% putenv so PATH and the rest of the parent environment still apply.
+    _ = os:putenv("FORCE_COLOR", "1"),
     case file:read_file_info(Exe) of
         {ok, #file_info{type = regular}} ->
             case open_tailwind_port(Exe, Args) of
@@ -160,7 +176,8 @@ tailwind_port_loop(Port, Pid) ->
                 nomatch ->
                     ok;
                 _ ->
-                    Pid ! {hot_skeleton_tailwind_rebuilt, Line}
+                    Pid ! {hot_skeleton_tailwind_rebuilt, Line},
+                    _ = io:put_chars([format_tailwind_log_line(Line), <<"\n">>])
             end,
             tailwind_port_loop(Port, Pid);
         {Port, {data, {noeol, _Chunk}}} ->
