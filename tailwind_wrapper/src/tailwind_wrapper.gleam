@@ -12,7 +12,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import simplifile
-import tailwind
+import tailwind_install
 
 /// Legacy one-line import (Tailwind v4 auto-scan could watch the built CSS; line decode was also wrong for `{tw_rebuild, Line}`).
 const legacy_default_input = "@import \"tailwindcss\";\n"
@@ -105,10 +105,7 @@ pub fn start(config: Config, on_event: fn(Event) -> Nil) -> Nil {
 fn do_install_and_prepare(config: Config) -> Result(Nil, String) {
   let _ = ensure_input_file(config)
   let _ = simplifile.create_directory_all(parent_dir(config.output_css))
-  case tailwind.install() {
-    Error(msg) -> Error(msg)
-    Ok(Nil) -> Ok(Nil)
-  }
+  tailwind_install.install_cli(config.cli_path)
 }
 
 fn parent_dir(path: String) -> String {

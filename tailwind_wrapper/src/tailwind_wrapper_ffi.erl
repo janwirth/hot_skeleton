@@ -10,7 +10,9 @@
     file_mtime_size/1,
     wait_for_css_write_complete/3,
     css_cache_bust/1,
-    monotonic_ms/0
+    monotonic_ms/0,
+    os_arch/0,
+    os_platform/0
 ]).
 
 -spec cwd() -> binary().
@@ -188,3 +190,25 @@ read_mtime_size(Path) ->
         {error, _} ->
             {0, 0}
     end.
+
+%% Same as glailglind `tailwind_erl` (Tailwind release artifact name selection).
+-spec os_arch() -> binary().
+os_arch() ->
+    Arch = erlang:system_info(system_architecture),
+    list_to_binary(hd(string:tokens(Arch, "-"))).
+
+-spec os_platform() -> binary().
+os_platform() ->
+    Platform = case os:type() of
+        {win32, _nt} ->
+            <<"win32">>;
+        {unix, linux} ->
+            <<"linux">>;
+        {unix, darwin} ->
+            <<"darwin">>;
+        {unix, freebsd} ->
+            <<"freebsd">>;
+        {_, _} ->
+            <<"unknown">>
+    end,
+    Platform.
