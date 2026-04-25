@@ -9,6 +9,7 @@ import gleam/io
 import gleam/erlang/application
 import gleam/erlang/process.{sleep_forever}
 import gleam/http
+import gleam/otp/actor
 import gleam/http/request
 import gleam/http/response
 import gleam/int
@@ -18,25 +19,78 @@ import mist
 
 import woof
 
+const max_port_attempts: Int = 10_000
+
 /// [`mist.new`] accepts a handler `fn(Request(mist.Connection)) -> Response(mist.ResponseData)`.
 /// [`component_wrapper.start_hot_server`](./component_wrapper.gleam#start_hot_server) passes the
 /// [`hot_reload`](./hot_reload.gleam)-wrapped handler.
+///
+/// Tries `first_port` first, then `first_port+1` … up to 10,000 times (capped at 65535) until bind succeeds.
 pub fn start(
-  port: Int,
+  first_port: Int,
   handle: fn(request.Request(mist.Connection)) ->
     response.Response(mist.ResponseData),
 ) -> Nil {
-  let assert Ok(_) =
+  let end_port = int.min(first_port + max_port_attempts, 65_535)
+  try_listen_loop(first_port, end_port, handle, first_port)
+}
+
+fn try_listen_loop(
+  port: Int,
+  end_port: Int,
+  handle: fn(request.Request(mist.Connection)) ->
+    response.Response(mist.ResponseData),
+  origin_port: Int,
+) -> Nil {
+  case try_bind(port, handle) {
+    Ok(bound) -> {
+      woof.info("boot", [
+        woof.str("event", "listening on 0.0.0.0:" <> int.to_string(bound)),
+      ])
+      io.println("[hot_skeleton] listening on 0.0.0.0:" <> int.to_string(bound))
+      case bound == origin_port {
+        True -> Nil
+        False ->
+          io.println(
+            "[hot_skeleton] port "
+            <> int.to_string(origin_port)
+            <> " in use, using "
+            <> int.to_string(bound),
+          )
+      }
+      sleep_forever()
+    }
+    Error(_) if port < end_port ->
+      try_listen_loop(port + 1, end_port, handle, origin_port)
+    Error(_) -> {
+      io.println(
+        "[hot_skeleton] no free port from "
+        <> int.to_string(origin_port)
+        <> " to "
+        <> int.to_string(end_port)
+        <> " (inclusive).",
+      )
+      panic as "no free TCP port in range for hot_skeleton server"
+    }
+  }
+}
+
+fn try_bind(
+  port: Int,
+  handle: fn(request.Request(mist.Connection)) ->
+    response.Response(mist.ResponseData),
+) -> Result(Int, actor.StartError) {
+  case
     handle
     |> mist.new
     |> mist.bind("0.0.0.0")
     |> mist.port(port)
+    |> mist.after_start(fn(_p, _scheme, _ip) { Nil })
     |> mist.start
-  woof.info("boot", [
-    woof.str("event", "listening on 0.0.0.0:" <> int.to_string(port)),
-  ])
-  io.println("[hot_skeleton] listening on 0.0.0.0:" <> int.to_string(port))
-  sleep_forever()
+  {
+    Ok(_) -> Ok(port)
+    Error(e) -> Error(e)
+  }
 }
 
 /// Read `PORT` from the environment, falling back to `default`.
