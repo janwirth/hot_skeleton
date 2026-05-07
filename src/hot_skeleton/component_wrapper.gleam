@@ -46,7 +46,9 @@ pub fn start_hot_server(
     lustre.send(r, lustre.dispatch(reload_msg()))
   }
 
+  io.println("[hot_skeleton] start_hot_server: css_bust_hub.start…")
   let assert Ok(hub) = css_bust_hub.start()
+  io.println("[hot_skeleton] start_hot_server: css hub ok, resolve_port…")
   let on_tailwind = fn() {
     process.send(
       hub,
@@ -54,7 +56,11 @@ pub fn start_hot_server(
     )
   }
   let port = hot_server.resolve_port(default_port)
+  io.println(
+    "[hot_skeleton] start_hot_server: build handler + start_server_component…",
+  )
   let #(base, runtime) = build_http_handler_with_runtime(make_app, hub)
+  io.println("[hot_skeleton] start_hot_server: hot_reload.wrap + hot_server.start…")
   let after: Option(fn() -> Nil) =
     map(Some(on_beam_modules_loaded), fn(f) { fn() { f(runtime) } })
   let handle = hot_reload.wrap(base, after, Some(on_tailwind))
@@ -72,8 +78,11 @@ fn build_http_handler_with_runtime(
   make_app: fn() -> App(Nil, model, message),
   hub: process.Subject(css_bust_hub.Message),
 ) -> #(HttpHandler, Runtime(message)) {
+  io.println("[hot_skeleton] build_http_handler: make_app()")
   let app = make_app()
+  io.println("[hot_skeleton] build_http_handler: start_server_component (runs logic.init)…")
   let assert Ok(singleton) = start_server_component(app, Nil)
+  io.println("[hot_skeleton] build_http_handler: lustre runtime ready")
   let serve_ws = fn(req: Request(mist.Connection)) {
     serve_component_websocket(req, singleton)
   }

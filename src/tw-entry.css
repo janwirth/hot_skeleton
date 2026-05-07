@@ -2,5 +2,5 @@
 @source not "../.hot_skeleton/tailwind.css";
 @source not "../build";
 @source not "../node_modules";
-@source "./**/*.gleam";
-@source "../dev/**/*.{gleam,html,js}";
+@source ".";
+@source "../dev";
