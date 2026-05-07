@@ -1,9 +1,38 @@
+//// Counter example. The MVU triple (`init`, `update`, `view`) lives in
+//// [`counter/logic`](./counter/logic.gleam) so that Gleam emits them as
+//// **cross-module** function references (`fun 'examples@counter@logic':update/2`).
+//// External fun refs dispatch through the Erlang code server on every
+//// call, which means radiate's hot code swap picks up new `update` logic
+//// inside the already-running lustre-server-component actor — no
+//// browser refresh, state preserved.
+////
+//// Gleam compiles bare, same-module references (`update`) to *local*
+//// fun refs that are pinned to the module version active at capture
+//// time, so they never hot-swap. Splitting into two modules is the
+//// cheapest way to opt into hot-reloadable `update`/`view`.
+
+import gleam/string
+import gleam/io
+import lustre.{type App}
+
+
+
+pub fn component() -> App(Nil, Model, Message) {
+  lustre.simple(init, update, view)
+}
+
+pub fn register() {
+  let app = lustre.simple(init, update, view_nonrecursive)
+  let res = lustre.register(app, "my-counter")
+  io.print(string.inspect(res))
+}
+  
+  
 //// MVU triple for the counter example. Kept in its own module so that
 //// references from [`examples/counter`](../counter.gleam) compile to
 //// cross-module (external) fun refs — see the note in `counter.gleam`
 //// for why that matters for hot code reloading.
 
-import lustre
 import gleam/int
 import lustre/attribute
 import lustre/element.{type Element}

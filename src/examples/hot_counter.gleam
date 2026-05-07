@@ -16,6 +16,10 @@ import gleam/io
 import examples/counter/logic
 import lustre.{type App}
 
+pub fn trigger_rerender_view() -> Message {
+  logic.trigger_rerender_view()
+}
+
 pub type Model =
   logic.Model
 

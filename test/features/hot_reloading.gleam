@@ -37,7 +37,7 @@ import dream_test/gherkin/steps.{
 import dream_test/gherkin/world
 import dream_test/matchers/equality.{equal}
 import dream_test/types.{type AssertionResult, type TestSuite, AssertionOk}
-import examples/counter
+import examples/hot_counter
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/int
@@ -91,7 +91,7 @@ import examples/counter/logic
 fn step_start_server(ctx: StepContext) -> AssertionResult {
   let assert Ok(port) = get_int(ctx.captures, 0)
   
-  let _ = hot_skeleton.start(counter.component, logic.dev_rerender_message)
+  let _ = hot_skeleton.start(hot_counter.component, hot_counter.trigger_rerender_view)
 
   // First `gleam test` can block on `tailwind/install` (CLI download) before the port opens.
   wait_for_server(port, 200)

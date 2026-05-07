@@ -1,6 +1,6 @@
 import gleam/io
-import examples/counter
-import examples/counter/logic
+import examples/hot_counter
+import examples/not_hot_counter
 import hot_skeleton/component_wrapper
 
 /// Development: run with `gleam dev`. Uses [`hot_reload`](./hot_skeleton/hot_reload.gleam) —
@@ -8,10 +8,19 @@ import hot_skeleton/component_wrapper
 /// a post-reload `dispatch` so the singleton Lustre runtime remounts vdom for new clients.
 pub fn main() -> Nil {
   io.print("Registering counter")
-  counter.register()
+  hot_counter.register()
   component_wrapper.start_hot_server(
-    counter.component,
+    hot_counter.component,
     8080,
-    logic.dev_rerender_message,
+    hot_counter.trigger_rerender_view,
   )
 }
+// pub fn main() -> Nil {
+//   io.print("Registering counter")
+//   not_hot_counter.register()
+//   component_wrapper.start_hot_server(
+//     not_hot_counter.component,
+//     8080,
+//     not_hot_counter.trigger_rerender_view,
+//   )
+// }
