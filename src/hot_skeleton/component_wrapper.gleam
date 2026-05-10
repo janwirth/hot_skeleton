@@ -2,13 +2,12 @@ import gleam/bytes_tree
 import gleam/erlang/application
 import gleam/erlang/process
 import gleam/http
-import gleam/io
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
+import gleam/io
 import gleam/json
 import gleam/option.{type Option, None, Some, map}
 import gleam/string
-import simplifile
 import hot_skeleton/css_bust_hub
 import hot_skeleton/dev_log
 import hot_skeleton/hot_reload
@@ -21,6 +20,7 @@ import lustre/element
 import lustre/element/html
 import lustre/server_component
 import mist
+import simplifile
 
 import woof
 
@@ -30,7 +30,6 @@ pub type HttpHandler =
 
 /// Lustre server component on `/`, WebSocket on `/ws`. The same handler is
 /// used in production and in dev.
-
 /// `on_beam_modules_loaded`: after [radiate] runs `gleam build` and loads new
 /// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
 /// [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch) a
@@ -41,7 +40,6 @@ pub fn start_hot_server(
   default_port: Int,
   reload_msg: fn() -> message,
 ) -> Nil {
-
   let on_beam_modules_loaded = fn(r: Runtime(message)) {
     lustre.send(r, lustre.dispatch(reload_msg()))
   }
@@ -50,17 +48,16 @@ pub fn start_hot_server(
   let assert Ok(hub) = css_bust_hub.start()
   io.println("[hot_skeleton] start_hot_server: css hub ok, resolve_port…")
   let on_tailwind = fn() {
-    process.send(
-      hub,
-      css_bust_hub.DoPush(t: hot_reload.css_cache_bust()),
-    )
+    process.send(hub, css_bust_hub.DoPush(t: hot_reload.css_cache_bust()))
   }
   let port = hot_server.resolve_port(default_port)
   io.println(
     "[hot_skeleton] start_hot_server: build handler + start_server_component…",
   )
   let #(base, runtime) = build_http_handler_with_runtime(make_app, hub)
-  io.println("[hot_skeleton] start_hot_server: hot_reload.wrap + hot_server.start…")
+  io.println(
+    "[hot_skeleton] start_hot_server: hot_reload.wrap + hot_server.start…",
+  )
   let after: Option(fn() -> Nil) =
     map(Some(on_beam_modules_loaded), fn(f) { fn() { f(runtime) } })
   let handle = hot_reload.wrap(base, after, Some(on_tailwind))
@@ -80,7 +77,9 @@ fn build_http_handler_with_runtime(
 ) -> #(HttpHandler, Runtime(message)) {
   io.println("[hot_skeleton] build_http_handler: make_app()")
   let app = make_app()
-  io.println("[hot_skeleton] build_http_handler: start_server_component (runs logic.init)…")
+  io.println(
+    "[hot_skeleton] build_http_handler: start_server_component (runs logic.init)…",
+  )
   let assert Ok(singleton) = start_server_component(app, Nil)
   io.println("[hot_skeleton] build_http_handler: lustre runtime ready")
   let serve_ws = fn(req: Request(mist.Connection)) {
@@ -103,6 +102,7 @@ fn build_http_handler_with_runtime(
       http.Get, ["ws"] -> serve_ws(req)
       http.Get, ["hot_skeleton_hmr.mjs"] -> serve_hot_skeleton_hmr_mjs()
       http.Get, ["lustre-server-component.mjs"] -> serve_lustre_mjs()
+      http.Get, ["kompas.js"] -> serve_kompas_js()
       _, _ -> hot_server.not_found(path)
     }
   }
@@ -116,10 +116,7 @@ fn index_document() -> String {
   }
   let head_children = [
     html.title([], "App"),
-    html.style(
-      [attribute.id("hot-skeleton-app-css")],
-      initial_css,
-    ),
+    html.style([attribute.id("hot-skeleton-app-css")], initial_css),
     html.script(
       [
         attribute.type_("module"),
@@ -134,6 +131,13 @@ fn index_document() -> String {
       ],
       "",
     ),
+    html.script(
+      [attribute.type_("module")],
+      "
+import * as kompas from '/kompas.js';
+kompas.register_scroll_view();
+",
+    ),
   ]
   let page =
     html.html([], [
@@ -145,9 +149,7 @@ fn index_document() -> String {
             server_component.method(server_component.WebSocket),
             attribute.shadowrootmode("open"),
           ],
-          [
-
-          ],
+          [],
         ),
       ]),
     ])
@@ -161,9 +163,7 @@ fn serve_index() -> Response(mist.ResponseData) {
 }
 
 fn serve_app_css() -> Response(mist.ResponseData) {
-  case
-    mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None)
-  {
+  case mist.send_file(hot_reload.css_path_string(), offset: 0, limit: None) {
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", "text/css; charset=utf-8")
@@ -191,6 +191,20 @@ fn serve_hot_skeleton_hmr_mjs() -> Response(mist.ResponseData) {
 fn serve_lustre_mjs() -> Response(mist.ResponseData) {
   let assert Ok(lustre_priv) = application.priv_directory("lustre")
   let file_path = lustre_priv <> "/static/lustre-server-component.mjs"
+  case mist.send_file(file_path, offset: 0, limit: None) {
+    Ok(file) ->
+      response.new(200)
+      |> response.prepend_header("content-type", "application/javascript")
+      |> response.set_body(file)
+    Error(_) ->
+      response.new(404)
+      |> response.set_body(mist.Bytes(bytes_tree.new()))
+  }
+}
+
+fn serve_kompas_js() -> Response(mist.ResponseData) {
+  let assert Ok(priv) = application.priv_directory("hot_skeleton")
+  let file_path = priv <> "/static/kompas.js"
   case mist.send_file(file_path, offset: 0, limit: None) {
     Ok(file) ->
       response.new(200)
@@ -249,10 +263,7 @@ fn serve_component_websocket(
 }
 
 type CssHmrState {
-  CssHmrState(
-    hub: process.Subject(css_bust_hub.Message),
-    id: Int,
-  )
+  CssHmrState(hub: process.Subject(css_bust_hub.Message), id: Int)
 }
 
 fn serve_css_bust(

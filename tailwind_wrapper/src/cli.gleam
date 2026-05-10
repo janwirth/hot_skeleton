@@ -7,13 +7,13 @@
 ////
 //// Default log path: `.tailwind-wrapper/events.log` (created under the current working directory).
 
+import envoy
 import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/result
 import gleam/string
-import envoy
 import simplifile
 import tailwind_wrapper as tw
 
@@ -40,8 +40,7 @@ fn format_event(e: tw.Event) -> String {
     tw.Initialized -> "initialized"
     tw.Failed(m) -> "failed: " <> m
     tw.Built(line, out) ->
-      "built out=" <> out <> " line="
-      <> string.replace(line, "\n", " ")
+      "built out=" <> out <> " line=" <> string.replace(line, "\n", " ")
   }
 }
 

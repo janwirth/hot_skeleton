@@ -86,12 +86,14 @@ pub fn tests() -> TestSuite {
 // ============================================================================
 // Steps
 // ============================================================================
-import hot_skeleton
 import examples/counter/logic
+import hot_skeleton
+
 fn step_start_server(ctx: StepContext) -> AssertionResult {
   let assert Ok(port) = get_int(ctx.captures, 0)
-  
-  let _ = hot_skeleton.start(hot_counter.component, hot_counter.trigger_rerender_view)
+
+  let _ =
+    hot_skeleton.start(hot_counter.component, hot_counter.trigger_rerender_view)
 
   // First `gleam test` can block on `tailwind/install` (CLI download) before the port opens.
   wait_for_server(port, 200)
@@ -177,7 +179,6 @@ fn pt_put(key: String, value: a) -> Nil
 
 @external(erlang, "persistent_term", "get")
 fn pt_get_default(key: String, default: a) -> a
-
 
 fn wait_for_server(port: Int, attempts: Int) -> Nil {
   case attempts {

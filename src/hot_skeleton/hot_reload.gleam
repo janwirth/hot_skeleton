@@ -25,8 +25,12 @@ import tailwind_wrapper as tw
 const default_input_rel = "src/tw-entry.css"
 
 /// Same paths as [`tailwind_wrapper.config_hot_skeleton`]; align `[tools.tailwind]`.
+/// Includes local [`kompas`](../../gleam.toml) (`ui_components`) so Tailwind sees
+/// classes used only inside that dependency (e.g. `flex-1` on scroll views).
 fn twc() -> tw.Config {
-  tw.config_hot_skeleton()
+  tw.Config(..tw.config_hot_skeleton(), extra_tailwind_sources: [
+    "../all-tuna-versions/tuna-gleam-monorepo/ui_components",
+  ])
 }
 
 /// When [`wrap`] is used, CSS is at [`css_path_string`] (default under `.hot_skeleton/`).

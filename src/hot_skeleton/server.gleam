@@ -5,16 +5,16 @@
 
 import envoy
 import gleam/bytes_tree
-import gleam/io
 import gleam/erlang/application
 import gleam/erlang/process.{sleep_forever}
 import gleam/http
-import gleam/otp/actor
 import gleam/http/request
 import gleam/http/response
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
 import mist
 
 import woof
@@ -54,7 +54,9 @@ pub fn start(
           woof.info("boot", [
             woof.str("event", "listening on 0.0.0.0:" <> int.to_string(bound)),
           ])
-          io.println("[hot_skeleton] listening on 0.0.0.0:" <> int.to_string(bound))
+          io.println(
+            "[hot_skeleton] listening on 0.0.0.0:" <> int.to_string(bound),
+          )
           case bound == first_port {
             True -> Nil
             False ->

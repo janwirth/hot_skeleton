@@ -25,6 +25,8 @@ gleam_otp = ">= 1.2.0 and < 2.0.0"
 radiate = ">= 1.0.0 and < 2.0.0"
 simplifile = ">= 2.4.0 and < 3.0.0"
 tailwind_wrapper = { path = "./tailwind_wrapper" }
+# Virtualized scroll + layout primitives (same stack as tuna_gleam / music_dedupe).
+kompas = { path = "../all-tuna-versions/tuna-gleam-monorepo/ui_components" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

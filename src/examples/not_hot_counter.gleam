@@ -10,12 +10,14 @@
 //// fun refs that are pinned to the module version active at capture
 //// time, so they never hot-swap. Splitting into two modules is the
 //// cheapest way to opt into hot-reloadable `update`/`view`.
+//// MVU triple for the counter example. Kept in its own module so that
+//// references from [`examples/counter`](../counter.gleam) compile to
+//// cross-module (external) fun refs — see the note in `counter.gleam`
+//// for why that matters for hot code reloading.
 
-import gleam/string
 import gleam/io
+import gleam/string
 import lustre.{type App}
-
-
 
 pub fn component() -> App(Nil, Model, Message) {
   lustre.simple(init, update, view)
@@ -26,12 +28,6 @@ pub fn register() {
   let res = lustre.register(app, "my-counter")
   io.print(string.inspect(res))
 }
-  
-  
-//// MVU triple for the counter example. Kept in its own module so that
-//// references from [`examples/counter`](../counter.gleam) compile to
-//// cross-module (external) fun refs — see the note in `counter.gleam`
-//// for why that matters for hot code reloading.
 
 import gleam/int
 import lustre/attribute
@@ -73,24 +69,30 @@ pub fn view(model: Model) -> Element(Message) {
 
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-green-100")], [
-      
-      view_button(label: "-", on_click: UserClickedDecrement),
-      html.p([], [html.text("Counter: "), html.text(count)]),
-      view_button(label: "+", on_click: UserClickedIncrement),
-      element.element("my-counter", [attribute.class("bg-orange-100")], [])
-    ]),
+    html.div(
+      [attribute.class("flex justify-between gap-3 items-center bg-green-100")],
+      [
+        view_button(label: "-", on_click: UserClickedDecrement),
+        html.p([], [html.text("Counter: "), html.text(count)]),
+        view_button(label: "+", on_click: UserClickedIncrement),
+        element.element("my-counter", [attribute.class("bg-orange-100")], []),
+      ],
+    ),
   ])
 }
+
 pub fn view_nonrecursive(model: Model) -> Element(Message) {
   let count = int.to_string(model)
   element.fragment([
     html.h1([attribute.class("text-xl font-medium")], [html.text("Hi you")]),
-    html.div([attribute.class("flex justify-between gap-3 items-center bg-reed-100")], [
-      view_button(label: "-", on_click: UserClickedDecrement),
-      html.p([], [html.text("Counter: "), html.text(count)]),
-      view_button(label: "+", on_click: UserClickedIncrement),
-    ]),
+    html.div(
+      [attribute.class("flex justify-between gap-3 items-center bg-reed-100")],
+      [
+        view_button(label: "-", on_click: UserClickedDecrement),
+        html.p([], [html.text("Counter: "), html.text(count)]),
+        view_button(label: "+", on_click: UserClickedIncrement),
+      ],
+    ),
   ])
 }
 
@@ -106,4 +108,3 @@ fn view_button(
     [html.text(label)],
   )
 }
-

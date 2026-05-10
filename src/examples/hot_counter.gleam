@@ -11,9 +11,9 @@
 //// time, so they never hot-swap. Splitting into two modules is the
 //// cheapest way to opt into hot-reloadable `update`/`view`.
 
-import gleam/string
-import gleam/io
 import examples/counter/logic
+import gleam/io
+import gleam/string
 import lustre.{type App}
 
 pub fn trigger_rerender_view() -> Message {
@@ -35,4 +35,3 @@ pub fn register() {
   let res = lustre.register(app, "my-counter")
   io.print(string.inspect(res))
 }
-  

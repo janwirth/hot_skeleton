@@ -21,10 +21,9 @@ fn handle_message(state: State, msg: Message) -> actor.Next(State, Message) {
     AddClient(bust, ack) -> {
       let id = state.next_id
       process.send(ack, id)
-      actor.continue(State(
-        next_id: int.add(id, 1),
-        clients: [#(id, bust), ..state.clients],
-      ))
+      actor.continue(
+        State(next_id: int.add(id, 1), clients: [#(id, bust), ..state.clients]),
+      )
     }
     RmClient(id) -> {
       let rest = list.filter(state.clients, fn(p) { p.0 != id })

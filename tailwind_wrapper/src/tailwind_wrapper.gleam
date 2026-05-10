@@ -27,6 +27,9 @@ pub type Config {
     generated_input: String,
     output_css: String,
     log_built_to_stdout: Bool,
+    /// `@source` paths relative to the directory containing [`generated_input`]
+    /// (e.g. for `src/tw-entry.css`, paths are relative to `src/`).
+    extra_tailwind_sources: List(String),
   )
 }
 
@@ -38,6 +41,7 @@ pub fn default_config() -> Config {
     generated_input: ".tailwind-wrapper/tailwind-input.css",
     output_css: "priv/tailwind.css",
     log_built_to_stdout: True,
+    extra_tailwind_sources: [],
   )
 }
 
@@ -52,6 +56,7 @@ pub fn config_hot_skeleton() -> Config {
     generated_input: "src/tw-entry.css",
     output_css: ".hot_skeleton/tailwind.css",
     log_built_to_stdout: True,
+    extra_tailwind_sources: [],
   )
 }
 
@@ -62,7 +67,11 @@ pub type Event {
 }
 
 @external(erlang, "tailwind_wrapper_ffi", "start_tailwind_watch")
-fn start_tailwind_watch(executable: String, args: List(String), notify: process.Pid) -> Nil
+fn start_tailwind_watch(
+  executable: String,
+  args: List(String),
+  notify: process.Pid,
+) -> Nil
 
 @external(erlang, "tailwind_wrapper_ffi", "absolute_path")
 fn absolute_path_ffi(relative: String) -> String
@@ -71,7 +80,11 @@ fn absolute_path_ffi(relative: String) -> String
 fn file_mtime_size(path: String) -> #(Int, Int)
 
 @external(erlang, "tailwind_wrapper_ffi", "wait_for_css_write_complete")
-fn wait_for_css_write_complete(path: String, pre_m: Int, pre_s: Int) -> #(Int, Int)
+fn wait_for_css_write_complete(
+  path: String,
+  pre_m: Int,
+  pre_s: Int,
+) -> #(Int, Int)
 
 @external(erlang, "tailwind_wrapper_ffi", "css_cache_bust")
 fn css_cache_bust_ffi(path: String) -> String
@@ -191,11 +204,13 @@ fn source_not_noisy_roots(input_dir: String) -> String {
   // Paths relative to the entry file (Tw v4), same as `relpath` for top-level names.
   let to_build = relpath_from_dir_to_file(input_dir, "build")
   let to_nm = relpath_from_dir_to_file(input_dir, "node_modules")
-  "@source not \""
-  <> to_build
-  <> "\";\n@source not \""
-  <> to_nm
-  <> "\";\n"
+  "@source not \"" <> to_build <> "\";\n@source not \"" <> to_nm <> "\";\n"
+}
+
+fn extra_source_lines(config: Config) -> String {
+  list.fold(config.extra_tailwind_sources, "", fn(acc, p) {
+    acc <> "@source \"" <> p <> "\";\n"
+  })
 }
 
 fn generated_entry_css(config: Config) -> String {
@@ -203,11 +218,13 @@ fn generated_entry_css(config: Config) -> String {
   let not_to_out = relpath_from_dir_to_file(input_dir, config.output_css)
   let not_noise = source_not_noisy_roots(input_dir)
   let scan = source_only_src_and_dev(input_dir)
+  let extras = extra_source_lines(config)
   "@import \"tailwindcss\" source(none);\n@source not \""
   <> not_to_out
   <> "\";\n"
   <> not_noise
   <> scan
+  <> extras
 }
 
 /// Bump when `build` was not in `@source not` (LSP / Gleam `build/**` was watched).
@@ -239,6 +256,16 @@ fn needs_entry_in_src_cwd_shape(config: Config, content: String) -> Bool {
       has_v4 && !has_dot
     }
     _ -> False
+  }
+}
+
+fn needs_extra_sources_migration(config: Config, content: String) -> Bool {
+  case string.contains(content, "source(none)") {
+    False -> False
+    True ->
+      list.any(config.extra_tailwind_sources, fn(p) {
+        !string.contains(content, "@source \"" <> p <> "\"")
+      })
   }
 }
 
@@ -286,6 +313,7 @@ fn ensure_generated_input_file(config: Config) -> Nil {
             || needs_generated_entry_migration(content)
             || needs_dev_source_migration(content)
             || needs_entry_in_src_cwd_shape(config, content)
+            || needs_extra_sources_migration(config, content)
           {
             True -> {
               let _ =
@@ -302,10 +330,7 @@ fn ensure_generated_input_file(config: Config) -> Nil {
     }
     _ -> {
       let _ =
-        simplifile.write(
-          config.generated_input,
-          generated_entry_css(config),
-        )
+        simplifile.write(config.generated_input, generated_entry_css(config))
       Nil
     }
   }
@@ -389,10 +414,7 @@ fn line_payload() {
 /// [`decode.at`] uses **0-based** tuple indices (`element(Index + 1, Tuple)` in
 /// the stdlib), so `[1]` is the line, not `[2]`.
 fn decode_rebuild_line(d: Dynamic) -> String {
-  result.unwrap(
-    decode.run(d, decode.at([1], line_payload())),
-    "",
-  )
+  result.unwrap(decode.run(d, decode.at([1], line_payload())), "")
 }
 
 fn watch_loop(

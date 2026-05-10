@@ -35,15 +35,25 @@ fn cache_dir_root() -> Result(String, String) {
         "win32" ->
           case envoy.get("LOCALAPPDATA") {
             Ok(p) if p != "" -> Ok(filepath.join(p, "tailwind-wrapper"))
-            _ -> Error("tailwind_wrapper: no LOCALAPPDATA, set TAILWIND_WRAPPER_CACHE")
+            _ ->
+              Error(
+                "tailwind_wrapper: no LOCALAPPDATA, set TAILWIND_WRAPPER_CACHE",
+              )
           }
         _ ->
           case envoy.get("XDG_CACHE_HOME") {
             Ok(p) if p != "" -> Ok(filepath.join(p, "tailwind-wrapper"))
             _ ->
               case envoy.get("HOME") {
-                Ok(h) if h != "" -> Ok(filepath.join(filepath.join(h, ".cache"), "tailwind-wrapper"))
-                _ -> Error("tailwind_wrapper: no HOME, set TAILWIND_WRAPPER_CACHE or XDG_CACHE_HOME")
+                Ok(h) if h != "" ->
+                  Ok(filepath.join(
+                    filepath.join(h, ".cache"),
+                    "tailwind-wrapper",
+                  ))
+                _ ->
+                  Error(
+                    "tailwind_wrapper: no HOME, set TAILWIND_WRAPPER_CACHE or XDG_CACHE_HOME",
+                  )
               }
           }
       }
@@ -52,8 +62,13 @@ fn cache_dir_root() -> Result(String, String) {
 
 fn get_config() -> Result(Dict(String, Toml), String) {
   simplifile.read(config_path)
-  |> result.map_error(fn(e) { "Error: couldn't read " <> config_path <> " " <> string.inspect(e) })
-  |> result.try(fn(config) { tom.parse(config) |> result.replace_error("Error: couldn't parse gleam.toml.") })
+  |> result.map_error(fn(e) {
+    "Error: couldn't read " <> config_path <> " " <> string.inspect(e)
+  })
+  |> result.try(fn(config) {
+    tom.parse(config)
+    |> result.replace_error("Error: couldn't parse gleam.toml.")
+  })
 }
 
 /// `None` in the inner option means: use the latest release for download URL and cache under `latest/`.
@@ -124,11 +139,19 @@ fn err_platform(os: String, ar: String) -> Result(String, String) {
 
 fn github_path(version: Option(String), target: String) -> String {
   case version {
-    None -> "/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-" <> target
+    None ->
+      "/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-"
+      <> target
     Some("v" <> v) ->
-      "/tailwindlabs/tailwindcss/releases/download/v" <> v <> "/tailwindcss-" <> target
+      "/tailwindlabs/tailwindcss/releases/download/v"
+      <> v
+      <> "/tailwindcss-"
+      <> target
     Some(v) ->
-      "/tailwindlabs/tailwindcss/releases/download/v" <> v <> "/tailwindcss-" <> target
+      "/tailwindlabs/tailwindcss/releases/download/v"
+      <> v
+      <> "/tailwindcss-"
+      <> target
   }
 }
 
@@ -147,7 +170,9 @@ fn download_bin_to(path: String, github_rel: String) -> Result(Nil, String) {
   )
   use _ <- result.try(
     simplifile.write_bits(resp.body, to: path)
-    |> result.map_error(fn(e) { "Error: write " <> path <> " " <> string.inspect(e) }),
+    |> result.map_error(fn(e) {
+      "Error: write " <> path <> " " <> string.inspect(e)
+    }),
   )
   Ok(Nil)
 }
@@ -155,11 +180,15 @@ fn download_bin_to(path: String, github_rel: String) -> Result(Nil, String) {
 fn copy_bin(from: String, to: String) -> Result(Nil, String) {
   use bits <- result.try(
     simplifile.read_bits(from)
-    |> result.map_error(fn(e) { "Error: read " <> from <> " " <> string.inspect(e) }),
+    |> result.map_error(fn(e) {
+      "Error: read " <> from <> " " <> string.inspect(e)
+    }),
   )
   use _ <- result.try(
     simplifile.write_bits(bits, to: to)
-    |> result.map_error(fn(e) { "Error: write " <> to <> " " <> string.inspect(e) }),
+    |> result.map_error(fn(e) {
+      "Error: write " <> to <> " " <> string.inspect(e)
+    }),
   )
   Ok(Nil)
 }
@@ -215,7 +244,10 @@ pub fn install_cli(local_executable: String) -> Result(Nil, String) {
   }
 }
 
-fn ensure_with_copy(cached: String, local_executable: String) -> Result(Nil, String) {
+fn ensure_with_copy(
+  cached: String,
+  local_executable: String,
+) -> Result(Nil, String) {
   use _ <- result.try(
     simplifile.create_directory_all(filepath.directory_name(local_executable))
     |> result.map_error(string.inspect),
@@ -225,6 +257,9 @@ fn ensure_with_copy(cached: String, local_executable: String) -> Result(Nil, Str
     simplifile.set_permissions_octal(local_executable, 0o755)
     |> result.map_error(string.inspect),
   )
-  io.println("tailwind_wrapper: installed project CLI: " <> abs_path_ffi(local_executable))
+  io.println(
+    "tailwind_wrapper: installed project CLI: "
+    <> abs_path_ffi(local_executable),
+  )
   Ok(Nil)
 }
