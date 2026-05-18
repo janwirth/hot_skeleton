@@ -2,7 +2,8 @@
 //// file, emit CSS, and report [`Event`]s (colored line + output path on each build).
 //// For [`config_hot_skeleton`], a root `app.tailwind.css` is **not** used for the
 //// CLI (so `--cwd=src` + `src/tw-entry.css` is not replaced by a project-root `-i`).
-//// `src/tw-entry.css` is still **written** even when `app.tailwind.css` exists.
+//// When [`generated_input`] is missing it is created from the template; an **existing**
+//// file is never overwritten so host `@source` edits stay intact (regenerate by deleting it).
 
 import gleam/bit_array
 import gleam/dynamic.{type Dynamic}
@@ -16,9 +17,6 @@ import gleam/result
 import gleam/string
 import simplifile
 import tailwind_install
-
-/// Legacy one-line import (Tailwind v4 auto-scan could watch the built CSS; line decode was also wrong for `{tw_rebuild, Line}`).
-const legacy_default_input = "@import \"tailwindcss\";\n"
 
 pub type Config {
   Config(
@@ -227,48 +225,6 @@ fn generated_entry_css(config: Config) -> String {
   <> extras
 }
 
-/// Bump when `build` was not in `@source not` (LSP / Gleam `build/**` was watched).
-fn needs_generated_entry_migration(content: String) -> Bool {
-  let has_v4 = string.contains(content, "source(none)")
-  let has_build_not =
-    string.contains(content, "@source not \"../build")
-    || string.contains(content, "@source not \"./build")
-  has_v4 && !has_build_not
-}
-
-/// Older template: only `src/`, not `dev/`.
-fn needs_dev_source_migration(content: String) -> Bool {
-  let has_v4 = string.contains(content, "source(none)")
-  let has_dev =
-    string.contains(content, "@source \"../dev\"")
-    || string.contains(content, "@source \"./dev\"")
-  has_v4 && !has_dev
-}
-
-/// After moving the host entry to `src/tw-entry.css`, `@source` must use `.` not `../src`.
-fn needs_entry_in_src_cwd_shape(config: Config, content: String) -> Bool {
-  case config.generated_input {
-    "src/tw-entry.css" -> {
-      let has_v4 = string.contains(content, "source(none)")
-      let has_dot =
-        string.contains(content, "@source \".\";\n")
-        || string.contains(content, "@source \".\";")
-      has_v4 && !has_dot
-    }
-    _ -> False
-  }
-}
-
-fn needs_extra_sources_migration(config: Config, content: String) -> Bool {
-  case string.contains(content, "source(none)") {
-    False -> False
-    True ->
-      list.any(config.extra_tailwind_sources, fn(p) {
-        !string.contains(content, "@source \"" <> p <> "\"")
-      })
-  }
-}
-
 fn ensure_input_file(config: Config) -> Nil {
   // Old layout: input under `.hot_skeleton/`; new: `src/tw-entry.css` + `--cwd=src`
   case config.generated_input == "src/tw-entry.css" {
@@ -305,29 +261,7 @@ fn ensure_input_file(config: Config) -> Nil {
 fn ensure_generated_input_file(config: Config) -> Nil {
   let _ = simplifile.create_directory_all(parent_dir(config.generated_input))
   case simplifile.is_file(config.generated_input) {
-    Ok(True) -> {
-      case simplifile.read(config.generated_input) {
-        Ok(content) ->
-          case
-            content == legacy_default_input
-            || needs_generated_entry_migration(content)
-            || needs_dev_source_migration(content)
-            || needs_entry_in_src_cwd_shape(config, content)
-            || needs_extra_sources_migration(config, content)
-          {
-            True -> {
-              let _ =
-                simplifile.write(
-                  config.generated_input,
-                  generated_entry_css(config),
-                )
-              Nil
-            }
-            False -> Nil
-          }
-        _ -> Nil
-      }
-    }
+    Ok(True) -> Nil
     _ -> {
       let _ =
         simplifile.write(config.generated_input, generated_entry_css(config))

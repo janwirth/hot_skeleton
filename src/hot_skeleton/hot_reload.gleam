@@ -6,8 +6,8 @@
 //// `HOT_SKELETON_LOG=debug` for verbose. See [`dev_log.is_debug`].
 ////
 //// **Tailwind:** watch uses `src/tw-entry.css` with `tailwind_wrapper`’s `--cwd=src` layout,
-//// not `./app.tailwind.css` (a root `app` file would re-widen the Parcel watcher). The
-//// entry file is always materialized under `src/` even when `app.tailwind.css` exists.
+//// not `./app.tailwind.css` (a root `app` file would re-widen the Parcel watcher). If
+//// `src/tw-entry.css` is missing it is created once; it is not overwritten on later starts.
 ////
 //// Lustre stores `update`/`view` as function references; use cross-module
 //// calls for hot-swap. See [`examples/counter`](../examples/counter.gleam).
@@ -25,12 +25,10 @@ import tailwind_wrapper as tw
 const default_input_rel = "src/tw-entry.css"
 
 /// Same paths as [`tailwind_wrapper.config_hot_skeleton`]; align `[tools.tailwind]`.
-/// Includes local [`kompas`](../../gleam.toml) (`ui_components`) so Tailwind sees
-/// classes used only inside that dependency (e.g. `flex-1` on scroll views).
+/// Add `@source` lines to the host app's `src/tw-entry.css` for Gleam trees that
+/// contain Tailwind classes (the wrapper creates that file once and does not clobber it).
 fn twc() -> tw.Config {
-  tw.Config(..tw.config_hot_skeleton(), extra_tailwind_sources: [
-    "../all-tuna-versions/tuna-gleam-monorepo/ui_components",
-  ])
+  tw.config_hot_skeleton()
 }
 
 /// When [`wrap`] is used, CSS is at [`css_path_string`] (default under `.hot_skeleton/`).
