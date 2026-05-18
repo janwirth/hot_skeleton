@@ -28,8 +28,9 @@ import woof
 pub type HttpHandler =
   fn(Request(mist.Connection)) -> Response(mist.ResponseData)
 
-/// Lustre server component on `/`, WebSocket on `/ws`. The same handler is
-/// used in production and in dev.
+/// Lustre server component on `/`, WebSocket on `/ws`, and
+/// [`hot_server.serve_reverse_proxy`](./server.gleam#serve_reverse_proxy) on
+/// `/reverse-proxy`. The same handler is used in production and in dev.
 /// `on_beam_modules_loaded`: after [radiate] runs `gleam build` and loads new
 /// BEAM modules, this is called with the singleton [`Runtime`]. Use it to
 /// [`lustre.dispatch`](https://hexdocs.pm/lustre/lustre.html#dispatch) a
@@ -103,6 +104,7 @@ fn build_http_handler_with_runtime(
       http.Get, ["hot_skeleton_hmr.mjs"] -> serve_hot_skeleton_hmr_mjs()
       http.Get, ["lustre-server-component.mjs"] -> serve_lustre_mjs()
       http.Get, ["kompas.js"] -> serve_kompas_js()
+      http.Get, ["reverse-proxy"] -> hot_server.serve_reverse_proxy(req)
       _, _ -> hot_server.not_found(path)
     }
   }

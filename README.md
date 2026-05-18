@@ -23,6 +23,22 @@ minimal boilerplate.
 
 - **Production (no reloader):** `gleam run` — `src/hot_skeleton.gleam`.
 
+- **Local file streaming:** `GET /reverse-proxy?path=…` — streams a file
+  from disk via `mist.send_file` (audio, images, and common text types).
+  The `path` query parameter is the absolute or cwd-relative filesystem
+  path (URL-encode spaces and special characters). Responses: `400` if
+  `path` is missing, `404` if the file is absent, `415` for unsupported
+  extensions. Example:
+
+  ```text
+  curl "http://localhost:8080/reverse-proxy?path=/tmp/photo.png" -o photo.png
+  ```
+
+  Supported extensions include mp3, m4a, wav, ogg, flac, png, jpg, gif,
+  webp, svg, txt, md, html, css, json, js, gleam, yaml, and csv. See
+  [`hot_skeleton/server.streamable_content_type`](src/hot_skeleton/server.gleam)
+  for the full map. Implementation: [`serve_reverse_proxy`](src/hot_skeleton/server.gleam).
+
 - **Tests:** `gleam test` — `test/hot_skeleton_test.gleam` runs a
   [dream_test](https://hexdocs.pm/dream_test) Gherkin scenario
   (`test/features/hot_reloading.gleam`) that drives Chrome via

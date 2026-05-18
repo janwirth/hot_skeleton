@@ -1,5 +1,8 @@
 //// HTTP helpers for a mist web server: port, static files, 404, etc.
 ////
+//// [`serve_reverse_proxy`](#serve_reverse_proxy) implements
+//// `GET /reverse-proxy?path=…` for streaming local audio, images, and text.
+////
 //// Hot reload in dev is built on [`hot_reload`](../hot_reload.gleam) in
 //// [`component_wrapper`](./component_wrapper.gleam) and the dev entrypoint.
 
@@ -15,7 +18,9 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
 import mist
+import simplifile
 
 import woof
 
@@ -150,6 +155,94 @@ pub fn not_found(path: String) -> response.Response(mist.ResponseData) {
   woof.info("http", [woof.str("event", "404 " <> path)])
   response.new(404)
   |> response.set_body(mist.Bytes(bytes_tree.from_string("not found")))
+}
+
+/// `GET /reverse-proxy?path=…` — stream a local file (audio, image, or text) via
+/// [`mist.send_file`]. Returns 400 without `path`, 404 if missing, 415 for
+/// unsupported types.
+pub fn serve_reverse_proxy(
+  req: request.Request(mist.Connection),
+) -> response.Response(mist.ResponseData) {
+  case query_param(req, "path") {
+    None -> bad_request("missing path query parameter")
+    Some(file_path) ->
+      case streamable_content_type(file_path) {
+        None -> unsupported_media_type(file_path)
+        Some(content_type) ->
+          case simplifile.is_file(file_path) {
+            Ok(True) -> serve_local_file(file_path, content_type)
+            _ -> not_found(file_path)
+          }
+      }
+  }
+}
+
+fn bad_request(message: String) -> response.Response(mist.ResponseData) {
+  response.new(400)
+  |> response.set_body(mist.Bytes(bytes_tree.from_string(message)))
+}
+
+fn unsupported_media_type(path: String) -> response.Response(mist.ResponseData) {
+  woof.info("http", [woof.str("event", "415 reverse-proxy " <> path)])
+  response.new(415)
+  |> response.set_body(mist.Bytes(bytes_tree.from_string("unsupported media type")))
+}
+
+fn serve_local_file(
+  file_path: String,
+  content_type: String,
+) -> response.Response(mist.ResponseData) {
+  case mist.send_file(file_path, offset: 0, limit: None) {
+    Ok(file) ->
+      response.new(200)
+      |> response.prepend_header("content-type", content_type)
+      |> response.set_header("connection", "keep-alive")  // persistent connection
+      |> response.set_header("cache-control", "max-age=3600")  // cache hot files
+      |> response.set_body(file)
+    Error(_) -> not_found(file_path)
+  }
+}
+
+fn file_extension(path: String) -> String {
+  case string.split(path, ".") |> list.reverse {
+    [] -> ""
+    [ext, ..] -> string.lowercase(ext)
+  }
+}
+
+/// MIME type for paths we stream through `/reverse-proxy`; `None` otherwise.
+pub fn streamable_content_type(path: String) -> Option(String) {
+  case file_extension(path) {
+    "png" -> Some("image/png")
+    "jpg" | "jpeg" -> Some("image/jpeg")
+    "gif" -> Some("image/gif")
+    "webp" -> Some("image/webp")
+    "svg" -> Some("image/svg+xml")
+    "ico" -> Some("image/x-icon")
+    "bmp" -> Some("image/bmp")
+    "avif" -> Some("image/avif")
+    "mp3" -> Some("audio/mpeg")
+    "m4a" -> Some("audio/mp4")
+    "wav" -> Some("audio/wav")
+    "ogg" -> Some("audio/ogg")
+    "flac" -> Some("audio/flac")
+    "aac" -> Some("audio/aac")
+    "opus" -> Some("audio/opus")
+    "weba" -> Some("audio/webm")
+    "txt" -> Some("text/plain; charset=utf-8")
+    "md" -> Some("text/markdown; charset=utf-8")
+    "html" | "htm" -> Some("text/html; charset=utf-8")
+    "css" -> Some("text/css; charset=utf-8")
+    "json" -> Some("application/json; charset=utf-8")
+    "xml" -> Some("application/xml; charset=utf-8")
+    "js" | "mjs" | "cjs" -> Some("text/javascript; charset=utf-8")
+    "ts" -> Some("text/typescript; charset=utf-8")
+    "gleam" -> Some("text/plain; charset=utf-8")
+    "csv" -> Some("text/csv; charset=utf-8")
+    "log" -> Some("text/plain; charset=utf-8")
+    "yaml" | "yml" -> Some("text/yaml; charset=utf-8")
+    _ -> None
+  }
 }
 
 /// Serve a file from the given OTP application's `priv/static/` directory.
