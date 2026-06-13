@@ -196,6 +196,7 @@ fn serve_local_file(
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", content_type)
+      |> response.prepend_header("cross-origin-resource-policy", "same-origin")
       |> response.set_header("connection", "keep-alive")  // persistent connection
       |> response.set_header("cache-control", "max-age=3600")  // cache hot files
       |> response.set_body(file)

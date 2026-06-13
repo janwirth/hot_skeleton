@@ -74,6 +74,26 @@ svg, txt, md, html, css, json, js, gleam, yaml, and csv. Full map:
 [`streamable_content_type`](src/hot_skeleton/server.gleam) ·
 [`serve_reverse_proxy`](src/hot_skeleton/server.gleam).
 
+### Audio player (`audio_player_with_waveform`)
+
+The index page loads `/audio_player_with_waveform.js` and calls `register()` so
+Lustre custom elements (`audio-player-host`, `audio-player-waveform`, …) work
+in server-component apps (e.g. filesystem_explorer via `viewer_ui/media`).
+
+JS and reverse-proxy streams send `Cross-Origin-Resource-Policy: same-origin`
+(harmless without cross-origin isolation; kept for embed compatibility).
+
+Rebuild the bundle after changing
+[`audio_player_with_waveform`](../all-tuna-versions/tuna-gleam-monorepo/audio_player_with_waveform):
+
+```bash
+./scripts/build_audio_player_js.sh
+```
+
+Copies `audio_player_with_waveform.js` and `waveform_worker.mjs` into `priv/static/`.
+The host serves both at `/audio_player_with_waveform.js` and `/waveform_worker.mjs`
+(`application/javascript` — required for the waveform worker pool).
+
 ### Tests
 
 `gleam test` runs `test/hot_skeleton_test.gleam` plus a

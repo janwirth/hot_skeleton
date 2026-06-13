@@ -104,6 +104,8 @@ fn build_http_handler_with_runtime(
       http.Get, ["hot_skeleton_hmr.mjs"] -> serve_hot_skeleton_hmr_mjs()
       http.Get, ["lustre-server-component.mjs"] -> serve_lustre_mjs()
       http.Get, ["kompas.js"] -> serve_kompas_js()
+      http.Get, ["audio_player_with_waveform.js"] -> serve_audio_player_js()
+      http.Get, ["waveform_worker.mjs"] -> serve_waveform_worker_mjs()
       http.Get, ["reverse-proxy"] -> hot_server.serve_reverse_proxy(req)
       _, _ -> hot_server.not_found(path)
     }
@@ -138,6 +140,8 @@ fn index_document() -> String {
       "
 import * as kompas from '/kompas.js';
 kompas.register_scroll_view();
+import { register } from '/audio_player_with_waveform.js';
+register();
 ",
     ),
   ]
@@ -183,6 +187,7 @@ fn serve_hot_skeleton_hmr_mjs() -> Response(mist.ResponseData) {
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", "application/javascript")
+      |> response.prepend_header("cross-origin-resource-policy", "same-origin")
       |> response.set_body(file)
     Error(_) ->
       response.new(404)
@@ -197,6 +202,7 @@ fn serve_lustre_mjs() -> Response(mist.ResponseData) {
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", "application/javascript")
+      |> response.prepend_header("cross-origin-resource-policy", "same-origin")
       |> response.set_body(file)
     Error(_) ->
       response.new(404)
@@ -211,6 +217,30 @@ fn serve_kompas_js() -> Response(mist.ResponseData) {
     Ok(file) ->
       response.new(200)
       |> response.prepend_header("content-type", "application/javascript")
+      |> response.prepend_header("cross-origin-resource-policy", "same-origin")
+      |> response.set_body(file)
+    Error(_) ->
+      response.new(404)
+      |> response.set_body(mist.Bytes(bytes_tree.new()))
+  }
+}
+
+fn serve_audio_player_js() -> Response(mist.ResponseData) {
+  serve_apww_static("audio_player_with_waveform.js")
+}
+
+fn serve_waveform_worker_mjs() -> Response(mist.ResponseData) {
+  serve_apww_static("waveform_worker.mjs")
+}
+
+fn serve_apww_static(name: String) -> Response(mist.ResponseData) {
+  let assert Ok(priv) = application.priv_directory("hot_skeleton")
+  let file_path = priv <> "/static/" <> name
+  case mist.send_file(file_path, offset: 0, limit: None) {
+    Ok(file) ->
+      response.new(200)
+      |> response.prepend_header("content-type", "application/javascript; charset=utf-8")
+      |> response.prepend_header("cross-origin-resource-policy", "same-origin")
       |> response.set_body(file)
     Error(_) ->
       response.new(404)
