@@ -2,6 +2,7 @@
 *.beam
 *.ez
 /build
+kompas/build
 erl_crash.dump
 priv
 
